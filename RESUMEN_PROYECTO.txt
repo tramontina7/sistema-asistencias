@@ -1,0 +1,14 @@
+
+Cuantas comisiones hay por curso?
+Materias MMO?
+Materias Quimica?
+Estadisticas panel principal?
+Filtrado por preceptores/turno o preceptores/curso?
+Alumnos que cursan en otros cursos/turnos?
+Abrimos periodos de intensificacion?
+Alumno mayor de edad puede ser su propio tutor
+
+
+- Campus Virtual -
+
+Notas
