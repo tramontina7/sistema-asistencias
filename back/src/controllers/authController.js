@@ -13,4 +13,12 @@ export const authController = {
   me(req, res) {
     res.json(authService.me(req.usuario.id))
   },
+
+  loginAlumno(req, res) {
+    const { nombre, apellido, dni } = req.body
+    if (!nombre || !apellido || !dni) {
+      throw new HttpError(400, 'Nombre, apellido y DNI son requeridos')
+    }
+    res.json(authService.loginAlumno({ nombre, apellido, dni }))
+  },
 }

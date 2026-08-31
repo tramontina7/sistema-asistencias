@@ -120,10 +120,10 @@ export default function Cursos() {
             </div>
             {g.materias.map(m => (
               <div key={m.materia_id} className="tabla-fila">
-                <span>{m.nombre_materia}</span>
-                <span>{m.especialidad}</span>
-                <span>{m.tipo}</span>
-                <span>
+                <span data-label="Materia">{m.nombre_materia}</span>
+                <span data-label="Especialidad">{m.especialidad}</span>
+                <span data-label="Tipo">{m.tipo}</span>
+                <span data-label="Horarios">
                   <span className="muted">{textosHorarios(m.horarios)}</span>
                   <button className="btn-small" onClick={() => abrirHorario(m.materia_id)}>Editar horario</button>
                 </span>

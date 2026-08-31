@@ -8,8 +8,9 @@ import PerfilAlumno from './pages/PerfilAlumno'
 import Cursos from './pages/Cursos'
 import VerComisiones from './pages/VerComisiones'
 import Reportes from './pages/Reportes'
-import QrGenerar from './pages/QrGenerar'
 import QrEscanear from './pages/QrEscanear'
+import AlumnoLogin from './pages/AlumnoLogin'
+import AlumnoQr from './pages/AlumnoQr'
 
 function PrivateRoute() {
   const { usuario, loading } = useAuth()
@@ -23,6 +24,8 @@ function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/alumno/login" element={<AlumnoLogin />} />
+          <Route path="/alumno/qr" element={<AlumnoQr />} />
           <Route element={<PrivateRoute />}>
             <Route path="/asistencia" element={<Asistencia />} />
             <Route path="/alumnos" element={<Alumnos />} />
@@ -30,7 +33,6 @@ function App() {
             <Route path="/cursos" element={<Cursos />} />
             <Route path="/cursos/comisiones" element={<VerComisiones />} />
             <Route path="/reportes" element={<Reportes />} />
-            <Route path="/qr/generar" element={<QrGenerar />} />
             <Route path="/qr/escanear" element={<QrEscanear />} />
           </Route>
           <Route path="*" element={<Navigate to="/asistencia" />} />

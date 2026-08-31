@@ -201,12 +201,12 @@ export default function Reportes() {
               const pct = r.total > 0 ? Math.round(((r.presentes + r.tardanzas) / r.total) * 100) : 0
               return (
                 <div key={r.alumno_id} className="tabla-fila">
-                  <span className="col-nombre">{r.apellido}, {r.nombre}</span>
-                  <span className="col-num">{r.presentes || '-'}</span>
-                  <span className="col-num">{r.tardanzas || '-'}</span>
-                  <span className="col-num">{r.justificados || '-'}</span>
-                  <span className="col-num">{r.ausencias || '-'}</span>
-                  <span className={`col-num ${pct < 75 ? 'danger' : ''}`}>{pct}%</span>
+                  <span className="col-nombre" data-label="Alumno">{r.apellido}, {r.nombre}</span>
+                  <span className="col-num" data-label="Presentes">{r.presentes || '-'}</span>
+                  <span className="col-num" data-label="Tardanzas">{r.tardanzas || '-'}</span>
+                  <span className="col-num" data-label="Justificados">{r.justificados || '-'}</span>
+                  <span className="col-num" data-label="Ausentes">{r.ausencias || '-'}</span>
+                  <span className={`col-num ${pct < 75 ? 'danger' : ''}`} data-label="% Asist.">{pct}%</span>
                 </div>
               )
             })}

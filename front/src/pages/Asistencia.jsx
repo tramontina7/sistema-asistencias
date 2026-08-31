@@ -197,6 +197,10 @@ export default function Asistencia() {
     if (!materiaId) return
     const marcados = Object.keys(estados).length
     if (marcados === 0) return
+    if (faltantes > 0) {
+      setMensaje(`Faltan marcar ${faltantes} alumno(s) para poder guardar`)
+      return
+    }
     setSaving(true)
     setMensaje('')
     try {
@@ -221,6 +225,9 @@ export default function Asistencia() {
   const alumnosVisibles = esDivision && comision
     ? alumnos.filter(a => a.comision === comision)
     : alumnos
+  const sinMarcar = alumnosVisibles.filter(a => !estados[a.alumno_id])
+  const faltantes = sinMarcar.length
+  const marcadosVisibles = alumnosVisibles.filter(a => !!estados[a.alumno_id]).length
 
   return (
     <div>
@@ -292,11 +299,17 @@ export default function Asistencia() {
             <button
               className="btn-primary"
               onClick={guardar}
-              disabled={saving || !cambios || Object.keys(estados).length === 0}
+              disabled={saving || !cambios || marcadosVisibles === 0 || faltantes > 0}
             >
               {saving ? 'Guardando...' : 'Guardar Asistencia'}
             </button>
           </div>
+
+          {alumnosVisibles.length > 0 && faltantes > 0 && (
+            <p className="error">
+              Faltan marcar {faltantes} alumno(s) para poder guardar.
+            </p>
+          )}
 
           <div className="toma-lista">
             {alumnosVisibles.map(alumno => {

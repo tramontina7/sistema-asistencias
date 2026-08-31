@@ -1,8 +1,8 @@
 // Franjas por hora_entrada del horario (comparación lexicográfica válida por formato HH:MM).
 export const FRANJAS_TURNO = [
-  { turno: 'Mañana', desde: '00:00', hasta: '12:00' },
-  { turno: 'Tarde', desde: '12:00', hasta: '18:00' },
-  { turno: 'Noche', desde: '18:00', hasta: '24:00' },
+  { turno: 'Mañana', desde: '07:50', hasta: '12:00' },
+  { turno: 'Tarde', desde: '12:50', hasta: '17:00' },
+  { turno: 'Noche', desde: '17:30', hasta: '22:00' },
 ]
 
 export function turnoDeHora(hora) {

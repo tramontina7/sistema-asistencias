@@ -156,12 +156,12 @@ export default function Alumnos() {
           const curso = cursos.find(c => c.curso_id === a.curso_id)
           return (
             <div key={a.alumno_id} className="tabla-fila" onClick={() => navigate(`/alumnos/perfil?alumno=${a.alumno_id}`)}>
-              <span>{a.apellido}</span>
-              <span>{a.nombre}</span>
-              <span>{a.dni}</span>
-              <span>{curso ? curso.nombre : '-'}</span>
-              <span>{a.comision}</span>
-              <span className="actions-cell" onClick={e => e.stopPropagation()}>
+              <span data-label="Apellido">{a.apellido}</span>
+              <span data-label="Nombre">{a.nombre}</span>
+              <span data-label="DNI">{a.dni}</span>
+              <span data-label="Curso">{curso ? curso.nombre : '-'}</span>
+              <span data-label="Comisión">{a.comision}</span>
+              <span className="actions-cell" data-label="" onClick={e => e.stopPropagation()}>
                 <button className="btn-small" onClick={() => openEdit(a)}>Editar</button>
                 <button className="btn-elim btn-danger" onClick={() => handleDelete(a.alumno_id)}>Eliminar</button>
               </span>

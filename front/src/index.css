@@ -17,6 +17,7 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
+* { user-select: none; -webkit-user-select: none; }
 
 body {
   font-family: system-ui, -apple-system, 'Segoe UI Variable Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -37,6 +38,29 @@ body {
 
 .mobile-topbar { display: none; }
 .menu-toggle { display: none; }
+
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  background: rgba(15, 23, 42, 0.5);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.28s ease, visibility 0.28s ease;
+}
+
+.sidebar-close {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  margin-left: auto;
+  padding: 4px;
+  border-radius: 8px;
+  transition: color 0.15s ease;
+}
+.sidebar-close:hover { color: #fff; }
 
 .sidebar {
   width: var(--sidebar-width);
@@ -451,6 +475,15 @@ body {
 
 .filters .form-group { margin-bottom: 0; min-width: 200px; flex: 1; }
 
+/* En desktop/tablet, los botones de filtros no se estiran a todo el ancho */
+@media (min-width: 769px) {
+  .filters .form-group > .btn-primary,
+  .filters .form-group > .btn-secondary {
+    width: auto;
+    white-space: nowrap;
+  }
+}
+
 /* CARDS */
 .cards {
   display: grid;
@@ -859,7 +892,6 @@ body {
   font-weight: 700;
   font-size: 14px;
   transition: all 0.1s;
-  user-select: none;
   min-height: 34px;
 }
 
@@ -985,7 +1017,7 @@ body {
 
 .tabla-cursos .table-header,
 .tabla-cursos .tabla-fila {
-  grid-template-columns: 1.6fr 1fr 110px 1.6fr 1.5fr;
+  grid-template-columns: 1.6fr 1fr 110px 1.5fr;
 }
 
 .tabla-alumnos-crud .table-header,
@@ -997,7 +1029,7 @@ body {
   min-width: 0;
 }
 
-.tabla-comisiones { overflow: visible; }
+.tabla-comisiones { overflow-x: auto; }
 .tabla-comisiones .table-header,
 .tabla-comisiones .tabla-fila {
   grid-template-columns: 1.2fr 1.2fr 120px 1.4fr 1.2fr 110px 120px;
@@ -1008,6 +1040,32 @@ body {
 .tabla-comisiones select { width: 100%; min-width: 104px; padding: 6px 8px; }
 .tabla-comisiones .tabla-fila > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tabla-comisiones .tabla-fila > span.select-cell { overflow: visible; }
+
+/* Editor de horarios (modal de Cursos) */
+.horarios-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.horario-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.horario-row select,
+.horario-row input[type="time"] {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+}
 
 .comision-fija {
   font-weight: 600;
@@ -1439,12 +1497,13 @@ h2 { margin: 24px 0 12px; font-size: 20px; color: var(--sidebar-bg); }
   justify-content: center;
   align-items: center;
   min-height: 100vh;
+  padding: 16px;
   background: linear-gradient(135deg, #1e293b, #334155);
 }
 
 .alumno-qr-card {
   background: #fff;
-  padding: 40px;
+  padding: clamp(24px, 6vw, 40px);
   border-radius: 16px;
   box-shadow: 0 20px 60px rgba(0,0,0,0.3);
   text-align: center;
@@ -1465,6 +1524,12 @@ h2 { margin: 24px 0 12px; font-size: 20px; color: var(--sidebar-bg); }
   margin-bottom: 8px;
 }
 
+.alumno-refresco {
+  font-size: 13px;
+  color: var(--text-light);
+  margin: 0 0 4px;
+}
+
 .alumno-qr-code {
   display: flex;
   justify-content: center;
@@ -1473,8 +1538,9 @@ h2 { margin: 24px 0 12px; font-size: 20px; color: var(--sidebar-bg); }
 
 .alumno-qr-code canvas,
 .alumno-qr-code svg {
-  width: 240px;
-  height: 240px;
+  width: min(240px, 70vw);
+  height: auto;
+  max-width: 100%;
 }
 
 .alumno-instruccion {
@@ -1499,7 +1565,9 @@ h2 { margin: 24px 0 12px; font-size: 20px; color: var(--sidebar-bg); }
 }
 
 /* RESPONSIVE */
-@media (max-width: 1024px) {
+
+/* ===== Tablet: sidebar como rail de íconos (769px - 1024px) ===== */
+@media (min-width: 769px) and (max-width: 1024px) {
   .main-area {
     flex-direction: column;
     justify-content: flex-start;
@@ -1520,8 +1588,135 @@ h2 { margin: 24px 0 12px; font-size: 20px; color: var(--sidebar-bg); }
   }
 
   .aside-logout { align-self: flex-start; }
+
+  /* Rail: sidebar compacto de íconos */
+  .sidebar {
+    width: 64px;
+    overflow: visible;
+  }
+
+  .sidebar-links {
+    overflow: visible;
+  }
+
+  .main-area {
+    margin-left: 64px;
+  }
+
+  .sidebar-links a,
+  .nav-group-toggle,
+  .sidebar-logout {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+    gap: 0;
+  }
+
+  .nav-label,
+  .nav-chevron {
+    display: none;
+  }
+
+  .sidebar-logout span {
+    display: none;
+  }
+
+  .sidebar-header {
+    padding: 16px 0;
+  }
+
+  .sidebar-close { display: none; }
+
+  /* Flyout de sublinks sobre el rail al pasar el cursor */
+  .nav-group {
+    position: relative;
+  }
+
+  .nav-sublinks {
+    position: absolute;
+    top: 0;
+    left: 100%;
+    width: 210px;
+    min-height: auto;
+    display: flex;
+    flex-direction: column;
+    background: var(--sidebar-bg);
+    border-radius: 0 12px 12px 0;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+    visibility: hidden;
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+    z-index: 90;
+    padding: 6px;
+  }
+
+  .nav-group:hover .nav-sublinks,
+  .nav-group:focus-within .nav-sublinks {
+    visibility: visible;
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .nav-sublinks-inner {
+    overflow: visible;
+    visibility: visible;
+    min-height: 0;
+  }
+
+  .nav-sublinks a {
+    padding: 11px 16px;
+    font-size: 14px;
+    justify-content: flex-start;
+    border-radius: 8px;
+  }
+
+  .sidebar-links a,
+  .sidebar-logout {
+    position: relative;
+  }
+
+  /* Tooltip de texto para ítems sin sublinks en el rail */
+  .sidebar-links a::after,
+  .sidebar-logout::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 100%;
+    top: 50%;
+    transform: translate(8px, -50%);
+    background: var(--sidebar-bg);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    padding: 6px 10px;
+    border-radius: 8px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.18s ease, visibility 0.18s;
+    z-index: 90;
+    pointer-events: none;
+  }
+
+  .sidebar-links a:hover::after,
+  .sidebar-logout:hover::after {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* En modo rail, las tablas anchas hacen scroll interno en vez de cliparse */
+  .table-alumnos,
+  .report-table {
+    overflow-x: auto;
+  }
+
+  .tabla-comisiones {
+    overflow-x: auto;
+  }
 }
 
+/* ===== Móvil: drawer off-canvas + overlay (hasta 768px) ===== */
 @media (max-width: 768px) {
   .layout { flex-direction: column; }
 
@@ -1531,7 +1726,10 @@ h2 { margin: 24px 0 12px; font-size: 20px; color: var(--sidebar-bg); }
     gap: 12px;
     background: var(--sidebar-bg);
     color: #fff;
-    padding: 12px 16px;
+    padding: 10px 16px;
+    position: sticky;
+    top: 0;
+    z-index: 60;
   }
 
   .mobile-topbar h2 {
@@ -1557,6 +1755,7 @@ h2 { margin: 24px 0 12px; font-size: 20px; color: var(--sidebar-bg); }
     background: transparent;
     border: none;
     cursor: pointer;
+    flex-shrink: 0;
   }
 
   .menu-toggle span {
@@ -1580,22 +1779,31 @@ h2 { margin: 24px 0 12px; font-size: 20px; color: var(--sidebar-bg); }
     transform: translateY(-7px) rotate(-45deg);
   }
 
+  /* Drawer deslizante desde la izquierda */
   .sidebar {
-    width: 100%;
-    position: relative;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 264px;
     height: auto;
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease;
-    box-shadow: none;
+    max-height: none;
+    transform: translateX(-100%);
+    transition: transform 0.28s ease;
+    box-shadow: 0 0 40px rgba(0,0,0,0.35);
+    z-index: 70;
   }
 
   .sidebar.open {
-    max-height: 720px;
+    transform: translateX(0);
   }
 
   .sidebar-header {
-    padding: 16px 20px;
+    padding: 16px 14px;
+  }
+
+  .sidebar-close {
+    display: block;
   }
 
   .sidebar-links a {
@@ -1610,6 +1818,15 @@ h2 { margin: 24px 0 12px; font-size: 20px; color: var(--sidebar-bg); }
     padding-left: 31px;
   }
 
+  .sidebar-overlay {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .brand {
+    padding: 0;
+  }
+
   .main-area { margin-left: 0; padding: 0 16px; }
   .content { padding: 16px 0 32px; }
   .filters { flex-direction: column; }
@@ -1618,17 +1835,21 @@ h2 { margin: 24px 0 12px; font-size: 20px; color: var(--sidebar-bg); }
   .qr-scan-page { max-width: 100%; }
   .scanner-container { max-width: 100%; }
 
-  .table-alumnos {
+  /* Cards móviles: usan data-label de cada celda */
+  .table-alumnos,
+  .report-table {
     background: transparent;
     border: none;
     overflow: visible;
   }
 
-  .table-alumnos .table-header {
+  .table-alumnos .table-header,
+  .report-table .table-header {
     display: none;
   }
 
-  .table-alumnos .tabla-fila {
+  .table-alumnos .tabla-fila,
+  .report-table .tabla-fila {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px 12px;
@@ -1640,8 +1861,9 @@ h2 { margin: 24px 0 12px; font-size: 20px; color: var(--sidebar-bg); }
     font-size: 13px;
   }
 
-  .table-alumnos .tabla-fila > span:not(.actions-cell)::before {
-    content: '';
+  .table-alumnos .tabla-fila > *::before,
+  .report-table .tabla-fila > *::before {
+    content: attr(data-label);
     display: block;
     font-size: 11px;
     font-weight: 600;
@@ -1651,15 +1873,27 @@ h2 { margin: 24px 0 12px; font-size: 20px; color: var(--sidebar-bg); }
     margin-bottom: 2px;
   }
 
-  .table-alumnos .tabla-fila > span:nth-child(1)::before { content: 'Apellido'; }
-  .table-alumnos .tabla-fila > span:nth-child(2)::before { content: 'Nombre'; }
-  .table-alumnos .tabla-fila > span:nth-child(3)::before { content: 'DNI'; }
-  .table-alumnos .tabla-fila > span:nth-child(4)::before { content: 'Curso'; }
-  .table-alumnos .tabla-fila > span:nth-child(5)::before { content: 'Comisión'; }
-
-  .table-alumnos .tabla-fila > .actions-cell {
+  .table-alumnos .tabla-fila > .actions-cell,
+  .report-table .tabla-fila > .actions-cell {
     grid-column: 1 / -1;
     margin-top: 4px;
+  }
+
+  /* Comisiones: selects ocupar todo el ancho de la card */
+  .tabla-comisiones .tabla-fila .select-cell select {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .tabla-comisiones .tabla-fila .select-cell {
+    grid-column: auto;
+  }
+}
+
+/* RESPONSIVE - ajustes auxiliares contenidos en ancho medio (901-1024) */
+@media (max-width: 1024px) {
+  .main-area {
+    justify-content: flex-start;
   }
 }
 
@@ -1679,7 +1913,6 @@ h2 { margin: 24px 0 12px; font-size: 20px; color: var(--sidebar-bg); }
   border-radius: 20px;
   cursor: pointer;
   background: var(--card-bg);
-  user-select: none;
 }
 .dia-chip input { display: none; }
 .dia-chip:has(input:checked) {

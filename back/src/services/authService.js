@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs'
 import db from '../db/index.js'
+import { decrypt } from '../utils/crypto.js'
 import { signToken } from '../utils/jwt.js'
 import { HttpError } from '../utils/http-error.js'
 
@@ -37,5 +38,41 @@ export const authService = {
 
     if (!user) throw new HttpError(401, 'Usuario no encontrado')
     return { ...user, rol: 'preceptor' }
+  },
+
+  loginAlumno({ nombre, apellido, dni }) {
+    const dniText = String(dni)
+    const candidatos = db.prepare(
+      `SELECT alumno_id, nombre, apellido, curso_id, dni_cif
+       FROM alumnos
+       WHERE LOWER(nombre) = LOWER(?) AND LOWER(apellido) = LOWER(?)`
+    ).all(nombre, apellido)
+
+    const alumno = candidatos.find(a => decrypt(a.dni_cif) === dniText)
+
+    if (!alumno) {
+      throw new HttpError(401, 'Datos incorrectos. Verificá tu nombre, apellido y DNI.')
+    }
+
+    const token = signToken(
+      {
+        tipo: 'alumno',
+        alumno_id: alumno.alumno_id,
+        nombre: alumno.nombre,
+        apellido: alumno.apellido,
+        curso_id: alumno.curso_id,
+      },
+      '1h'
+    )
+
+    return {
+      token,
+      alumno: {
+        id: alumno.alumno_id,
+        nombre: alumno.nombre,
+        apellido: alumno.apellido,
+        curso_id: alumno.curso_id,
+      },
+    }
   },
 }

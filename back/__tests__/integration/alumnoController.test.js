@@ -17,6 +17,7 @@ vi.mock('../../src/middlewares/auth.js', () => ({
     req.usuario = { id: 1, rol: 'preceptor' }
     next()
   }),
+  authenticateAlumno: vi.fn((_req, _res, next) => next()),
 }))
 
 import createApp from '../../src/app.js'

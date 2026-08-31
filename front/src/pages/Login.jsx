@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
@@ -54,6 +54,9 @@ export default function Login() {
             {loading ? 'Ingresando...' : 'Ingresar'}
           </button>
         </form>
+        <p className="login-footer-link">
+          <Link to="/alumno/login">¿Sos alumno? Ingresá acá para ver tu QR</Link>
+        </p>
       </div>
     </div>
   )

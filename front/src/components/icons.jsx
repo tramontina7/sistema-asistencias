@@ -94,3 +94,10 @@ export const IconChevron = props => (
     <path d="m9 18 6-6-6-6" />
   </Svg>
 )
+
+export const IconClose = props => (
+  <Svg {...props}>
+    <path d="M18 6 6 18" />
+    <path d="m6 6 12 12" />
+  </Svg>
+)

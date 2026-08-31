@@ -1,25 +1,10 @@
 import { qrService } from '../services/qrService.js'
 import { asistenciaService } from '../services/asistenciaService.js'
-import { env } from '../config/env.js'
 import { HttpError } from '../utils/http-error.js'
 
 export const qrController = {
-  generarTokens(req, res) {
-    const { alumno_id } = req.body
-    if (!alumno_id) {
-      throw new HttpError(400, 'alumno_id requerido')
-    }
-
-    const baseUrl = `${req.protocol}://${req.hostname}:${env.port}`
-    const tokens = qrService.generarTokens(alumno_id).map((a) => ({
-      id: a.alumno_id,
-      nombre: a.nombre,
-      apellido: a.apellido,
-      token: a.token,
-      url: `${baseUrl}/scan?token=${a.token}`,
-    }))
-
-    res.json({ tokens })
+  alumno(req, res) {
+    res.json(qrService.alumno(req.alumno.alumno_id))
   },
 
   escanear(req, res) {
@@ -46,11 +31,5 @@ export const qrController = {
       materia_id: materia.materia_id,
       materia_nombre: materia.nombre_materia,
     })
-  },
-
-  tokensPorCurso(req, res) {
-    const { curso_id } = req.body
-    if (!curso_id) throw new HttpError(400, 'curso_id requerido')
-    res.json({ tokens: qrService.tokensPorCurso(curso_id) })
   },
 }

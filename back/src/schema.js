@@ -55,8 +55,9 @@ export function runSchema() {
         apellido    TEXT NOT NULL,
         dni_hash    TEXT NOT NULL UNIQUE,
         dni_cif     TEXT NOT NULL,
-        curso_id    INTEGER NOT NULL REFERENCES cursos(curso_id) ON DELETE RESTRICT,
-        comision    TEXT NOT NULL CHECK(length(comision) > 0)
+        curso_id        INTEGER NOT NULL REFERENCES cursos(curso_id) ON DELETE RESTRICT,
+        comision        TEXT NOT NULL CHECK(length(comision) > 0),
+        qr_token_hash   TEXT NULL
       );
 
       CREATE TABLE IF NOT EXISTS materias (
@@ -138,6 +139,15 @@ export function runSchema() {
         db.exec('ALTER TABLE asistencias ADD COLUMN motivo_tarde TEXT NULL')
       }
       db.pragma('user_version = 7')
+    }
+
+    // Migración v8: hash del token QR vigente de cada alumno (rotación).
+    if (db.pragma('user_version', { simple: true }) < 8) {
+      const cols = db.prepare('PRAGMA table_info(alumnos)').all().map(c => c.name)
+      if (!cols.includes('qr_token_hash')) {
+        db.exec('ALTER TABLE alumnos ADD COLUMN qr_token_hash TEXT NULL')
+      }
+      db.pragma('user_version = 8')
     }
   })
 

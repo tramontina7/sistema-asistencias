@@ -146,10 +146,10 @@ export default function VerComisiones() {
               const enLista = COMISIONES.some(c => c.value === actual)
               return (
                 <div key={a.alumno_id} className="tabla-fila">
-                  <span>{a.apellido}</span>
-                  <span>{a.nombre}</span>
-                  <span>{a.dni}</span>
-                  <span className="select-cell">
+                  <span data-label="Apellido">{a.apellido}</span>
+                  <span data-label="Nombre">{a.nombre}</span>
+                  <span data-label="DNI">{a.dni}</span>
+                  <span className="select-cell" data-label="Curso">
                     <select
                       value={cursoValorDe(a)}
                       onChange={e => cambiarCursoAlumno(a.alumno_id, e.target.value)}
@@ -159,7 +159,7 @@ export default function VerComisiones() {
                       ))}
                     </select>
                   </span>
-                  <span className="select-cell">
+                  <span className="select-cell" data-label="Comisión">
                     <select
                       value={actual}
                       onChange={e => cambiarComision(a.alumno_id, e.target.value)}
@@ -170,8 +170,8 @@ export default function VerComisiones() {
                       ))}
                     </select>
                   </span>
-                  <span>{modificado ? 'Sin guardar' : 'Guardado'}</span>
-                  <span className="actions-cell">
+                  <span data-label="Estado">{modificado ? 'Sin guardar' : 'Guardado'}</span>
+                  <span className="actions-cell" data-label="">
                     <button
                       className="btn-small"
                       disabled={!modificado || guardando}

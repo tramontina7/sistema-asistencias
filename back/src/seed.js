@@ -9,23 +9,30 @@ const PRECEPTORES_BASE = [
   { nombre: 'Lucía', apellido: 'Fernández', dni: '44444444', telefono: '4567-8901', username: 'preceptor3', password: 'preceptor123', turno: 'Noche' },
 ]
 
-export async function runSeed() {
-  const count = db.prepare('SELECT COUNT(*) as c FROM preceptores').get().c
-
-  // Asegura los preceptores base y sus turnos (idempotente por username).
+// Inserta/actualiza preceptores de forma idempotente por username.
+// Con SEED_DEMO=false y SEED_PRECEPTORES se usan credenciales reales sin demo.
+async function asegurarPreceptores(lista) {
+  for (const u of lista) {
+    if (!u.username || !u.password || !u.nombre || !u.apellido || !u.telefono) {
+      throw new Error('[seed] Cada preceptor debe incluir username, password, nombre, apellido y telefono')
+    }
+    if (!u.dni) {
+      throw new Error('[seed] Cada preceptor debe incluir un dni numérico')
+    }
+  }
   const hashes = {}
-  for (const u of PRECEPTORES_BASE) {
+  for (const u of lista) {
     if (!(u.password in hashes)) {
       hashes[u.password] = await bcrypt.hash(u.password, 12)
     }
   }
-  const asegurarPreceptores = db.transaction(() => {
+  const tx = db.transaction(() => {
     const insert = db.prepare(
       `INSERT INTO preceptores (nombre, apellido, dni_hash, dni_cif, telefono, username, password_hash, turno)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     )
     const updateTurno = db.prepare('UPDATE preceptores SET turno = ? WHERE username = ?')
-    for (const u of PRECEPTORES_BASE) {
+    for (const u of lista) {
       const existente = db.prepare('SELECT preceptor_id, turno FROM preceptores WHERE username = ?').get(u.username)
       if (existente) {
         if (existente.turno !== u.turno) updateTurno.run(u.turno, u.username)
@@ -34,7 +41,37 @@ export async function runSeed() {
       }
     }
   })
-  asegurarPreceptores()
+  tx()
+}
+
+export async function runSeed() {
+  const count = db.prepare('SELECT COUNT(*) as c FROM preceptores').get().c
+  const useSeedDemo = process.env.SEED_DEMO !== 'false'
+  const preceptoresReales = process.env.SEED_PRECEPTORES
+
+  // Modo producción (SEED_DEMO=false): nunca se siembran credenciales demo.
+  if (!useSeedDemo) {
+    if (count > 0) return
+    if (preceptoresReales) {
+      let lista
+      try {
+        lista = JSON.parse(preceptoresReales)
+      } catch {
+        throw new Error('[seed] SEED_PRECEPTORES debe ser un JSON válido: [{username,password,nombre,apellido,turno}]')
+      }
+      if (!Array.isArray(lista) || lista.length === 0) {
+        throw new Error('[seed] SEED_PRECEPTORES debe ser un arreglo no vacío')
+      }
+      await asegurarPreceptores(lista)
+      console.log(`[seed] preceptores reales creados desde SEED_PRECEPTORES (${lista.length})`)
+    } else {
+      console.log('[seed] SEED_DEMO=false y sin SEED_PRECEPTORES: no se crean credenciales demo')
+    }
+    return
+  }
+
+  // Asegura los preceptores base y sus turnos (idempotente por username).
+  await asegurarPreceptores(PRECEPTORES_BASE)
 
   if (count > 0) return
 

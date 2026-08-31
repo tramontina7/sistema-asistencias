@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import bcrypt from 'bcryptjs'
-import { setupTestDb, resetDb } from '../helpers/inMemoryDb.js'
+import { setupTestDb, resetDb, seedCurso } from '../helpers/inMemoryDb.js'
+import { encrypt } from '../../src/utils/crypto.js'
 
 const mockedDb = setupTestDb()
 
@@ -8,6 +9,13 @@ import { authService } from '../../src/services/authService.js'
 import { HttpError } from '../../src/utils/http-error.js'
 
 const hash = bcrypt.hashSync('preceptor123', 4)
+
+function seedAlumnoCifrado({ nombre, apellido, dni, cursoId, comision = 'A' }) {
+  return mockedDb.prepare(
+    `INSERT INTO alumnos (nombre, apellido, dni_hash, dni_cif, curso_id, comision)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(nombre, apellido, String(dni), encrypt(String(dni)), cursoId, comision).lastInsertRowid
+}
 
 beforeEach(() => {
   resetDb(mockedDb)
@@ -67,6 +75,32 @@ describe('authService', () => {
 
     it('lanza HttpError 401 si el usuario no existe', () => {
       expect(() => authService.me(999)).toThrow(new HttpError(401, 'Usuario no encontrado'))
+    })
+  })
+
+  describe('loginAlumno', () => {
+    let cursoId
+
+    beforeEach(() => {
+      cursoId = seedCurso(mockedDb, { anio: 7, division: '1', especialidad: 'MMO' })
+    })
+
+    it('devuelve token de alumno para datos correctos (case-insensitive)', () => {
+      seedAlumnoCifrado({ nombre: 'Ana', apellido: 'López', dni: '40000001', cursoId })
+      const result = authService.loginAlumno({ nombre: 'ana', apellido: 'lópez', dni: '40000001' })
+      expect(result.token).toBeTruthy()
+      expect(result.alumno).toMatchObject({ nombre: 'Ana', apellido: 'López', curso_id: cursoId })
+    })
+
+    it('lanza HttpError 401 si no coincide el DNI', () => {
+      seedAlumnoCifrado({ nombre: 'Ana', apellido: 'López', dni: '40000001', cursoId })
+      expect(() => authService.loginAlumno({ nombre: 'Ana', apellido: 'López', dni: '999999' }))
+        .toThrow(new HttpError(401, 'Datos incorrectos. Verificá tu nombre, apellido y DNI.'))
+    })
+
+    it('lanza HttpError 401 si el nombre o apellido no existen', () => {
+      expect(() => authService.loginAlumno({ nombre: 'No', apellido: 'Existe', dni: '40000001' }))
+        .toThrow(new HttpError(401, 'Datos incorrectos. Verificá tu nombre, apellido y DNI.'))
     })
   })
 })

@@ -1,0 +1,97 @@
+=========================================================
+PLAN DE PREPARACIÓN PARA PRODUCCIÓN
+Sistema de Asistencias · Web App (React + Node/Express + SQLite)
+Destino: servidor propio de la LAN con Docker + Nginx (sin dominio, HTTP local)
+=========================================================
+
+DECISIONES CONFIRMADAS
+---------------------
+1) Formato de importación: CSV + pegado de texto.
+2) Horarios en CSV de materias: "Dia HH:MM-HH:MM" separados por ";", comisión opcional con "|comision".
+3) Preceptores reales definidos por variables de entorno (SEED_PRECEPTORES JSON), sin credenciales demo.
+4) Sin datos demo en producción (SEED_DEMO=false): la base arranca vacía y se carga con la importación masiva.
+5) Backup automático de SQLite (diario, retención configurable).
+6) Tráfico solo en red local (HTTP puerto 80), sin TLS por ahora.
+
+
+FASE 1 — Dockerizar la aplicación
+---------------------------------
+• back/Dockerfile (multi-stage):
+    - Stage build: node:lts-bookworm-slim + python3/make/g++ (compilar better-sqlite3 si no hay prebuild) → npm ci --omit=dev.
+    - Runtime: copia src/, package*.json y node_modules; VOLUME /app/data; instala cron (para el backup).
+• front/Dockerfile (multi-stage): npm ci && npm run build → copia dist/ a nginx:alpine.
+• deploy/nginx.conf:
+    - Escucha en 0.0.0.0:80.
+    - Static del front con try_files ... /index.html (SPA fallback).
+    - proxy_pass http://back:3000 para /api/.
+    - gzip y caché de assets.
+• docker-compose.yml:
+    - Servicios: back, web (nginx :80), backup.
+    - Volumen ./back/data:/app/data (persistencia BD + backups).
+    - restart: unless-stopped.
+    - Env: NODE_ENV=production, PORT=3000, DB_PATH=/app/data/school.db, secretos, SEED_*.
+
+
+FASE 2 — Configuración de producción (secretos y entorno)
+--------------------------------------------------------
+• back/.env.example: plantilla documentada con placeholders.
+• Generar secretos reales localmente (openssl rand) en back/.env.production (fuera de git).
+• back/src/config/env.js: fail-fast si NODE_ENV=production y JWT_SECRET/ENCRYPTION_KEY/QR_SECRET son los defaults de dev.
+• CORS configurable vía ALLOWED_ORIGINS (mismo-origin tras Nginx en LAN).
+
+
+FASE 3 — Seed con usuarios reales (sin demo)
+--------------------------------------------
+• back/src/seed.js:
+    - Crear preceptores desde SEED_PRECEPTORES (JSON: [{username,password,nombre,apellido,turno}]).
+    - Idempotente por username.
+    - SEED_DEMO (default false): si false, no se crean cursos/materias/alumnos de ejemplo.
+      Con SEED_DEMO=true se usa el seed actual de desarrollo.
+
+
+FASE 4 — Importación masiva (CSV + pegado)
+------------------------------------------
+Backend:
+• back/src/importService.js + back/src/routes/import.js + tests.
+• POST /api/import/:tipo con { data } (texto CSV o tab-separado) y soporte multipart (archivo .csv).
+• Tres formatos con plantilla:
+    - cursos:   anio,division,especialidad,turno
+    - materias: anio,division,especialidad,nombre_materia,tipo,horarios
+                (horarios: "Dia HH:MM-HH:MM" separados por ";", comisión opcional "|comision")
+    - alumnos:  anio,division,especialidad,comision,apellido,nombre,dni
+• El curso se resuelve por su clave UNIQUE (anio/division/especialidad/turno).
+• Materias con sus horarios; alumnos con DNI cifrado (reutilizando encrypt) y detección de duplicados.
+• Transacción por tipo. Respuesta { creados, actualizados, errores: [{ linea, mensaje }] }.
+
+Frontend:
+• front/src/pages/CargarDatos.jsx (ruta /importar, link en Sidebar).
+• Tabs: Cursos / Materias / Alumnos.
+• Área de pegado de texto + input de archivo CSV.
+• Botones Validar/Importar, plantillas descargables, reporte de errores por línea.
+
+
+FASE 5 — Backup automático
+--------------------------
+• back/src/backup.js: script Node con db.backup() → data/backups/school-AAAAMMDD-HHMMSS.db.
+• Purga de copias más viejas que BACKUP_RETENTION_DAYS (default 14). Log simple.
+• docker-compose: servicio "backup" (misma imagen back) con cron que ejecuta node /app/src/backup.js diario (03:00), montando el volumen de datos.
+
+
+FASE 6 — Scripts de despliegue y documentación
+----------------------------------------------
+• deploy/deploy.sh: genera secretos si faltan + docker compose up -d --build.
+• README: sección de deploy (acceso por http://<ip-del-server>:80, ubicación de BD y backups).
+
+
+VERIFICACIÓN
+------------
+• Back: npm run test:run (139 tests) en verde tras cambios de seed/import.
+• Front: npm run build + npm run lint en verde.
+• Smoke test del compose: login con preceptor real, importar CSV de prueba, backup manual.
+
+
+INCLUIDO EN LA IMAGEN (sin ajuste extra)
+----------------------------------------
+• Rediseño responsive (drawer móvil + rail tablet + cards data-label + QR óptimo en mobile).
+• Bloqueo de guardar asistencia hasta marcar a todos los alumnos visibles.
+• user-select: none global.

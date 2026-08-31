@@ -112,14 +112,14 @@ export default function PerfilAlumno() {
           </div>
           {perfil.ultimas.map(a => (
             <div key={a.asistencia_id} className="tabla-fila">
-              <span>{formatFecha(a.fecha)}</span>
-              <span>{a.nombre_materia}</span>
-              <span>
+              <span data-label="Fecha">{formatFecha(a.fecha)}</span>
+              <span data-label="Materia">{a.nombre_materia}</span>
+              <span data-label="Estado">
                 <span className={`badge ${ESTADO_CLASE[a.estado] || 'sin-asistencia'}`}>
                   {ESTADO_ETIQUETA[a.estado] || a.estado}
                 </span>
               </span>
-              <span>{a.hora_ingreso || '-'}</span>
+              <span data-label="Ingreso">{a.hora_ingreso || '-'}</span>
             </div>
           ))}
         </div>

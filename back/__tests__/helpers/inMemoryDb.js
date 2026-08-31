@@ -38,7 +38,8 @@ const { testDb } = vi.hoisted(() => {
       dni_hash    TEXT NOT NULL UNIQUE,
       dni_cif     TEXT NOT NULL,
       curso_id    INTEGER NOT NULL REFERENCES cursos(curso_id) ON DELETE RESTRICT,
-      comision    TEXT NOT NULL CHECK(length(comision) > 0)
+      comision    TEXT NOT NULL CHECK(length(comision) > 0),
+      qr_token_hash TEXT NULL
     );
 
     CREATE TABLE IF NOT EXISTS materias (

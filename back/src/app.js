@@ -4,6 +4,7 @@ import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import apiRoutes from './routes/index.js'
 import { notFound, errorHandler } from './middlewares/errorHandler.js'
+import { HttpError } from './utils/http-error.js'
 
 /**
  * Configura y devuelve la aplicación de Express.
@@ -13,9 +14,25 @@ import { notFound, errorHandler } from './middlewares/errorHandler.js'
 export function createApp() {
   const app = express()
 
+  // Detrás de Nginx/reverse proxy: usa la IP real del cliente para el rate limiter.
+  app.set('trust proxy', 1)
+
+  // Lista blanca de orígenes para CORS (separados por coma en ALLOWED_ORIGINS).
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+
   // Seguridad y parsing
   app.use(helmet())
-  app.use(cors())
+  app.use(cors({
+    origin(origin, callback) {
+      // Requests sin header Origin (same-origin, curl, tests) se permiten.
+      if (!origin) return callback(null, true)
+      if (allowedOrigins.includes(origin)) return callback(null, true)
+      return callback(new HttpError(403, 'CORS: origen no permitido'))
+    },
+  }))
   app.use(express.json({ limit: '10mb' }))
 
   // Límite global de solicitudes a la API
