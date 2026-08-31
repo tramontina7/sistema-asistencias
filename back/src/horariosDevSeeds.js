@@ -43,27 +43,24 @@ function shuffle(arr) {
 }
 
 function procesar() {
-  // 1) Asegurar columnas de esquema
+  // 1) Asegurar columna de esquema
   const horCols = db.prepare('PRAGMA table_info(horarios)').all().map(c => c.name)
   if (!horCols.includes('comision')) db.exec('ALTER TABLE horarios ADD COLUMN comision TEXT NULL')
-  if (!horCols.includes('docente_id')) {
-    db.exec('ALTER TABLE horarios ADD COLUMN docente_id INTEGER REFERENCES docentes(docente_id) ON DELETE SET NULL')
-  }
 
   // 2) Completar materia_comisiones para talleres/lab sin comisiones
   const sinComisiones = db.prepare(
-    `SELECT m.materia_id, m.docente_id
+    `SELECT m.materia_id
      FROM materias m
      WHERE m.tipo IN ('Taller', 'Laboratorio')
        AND NOT EXISTS (SELECT 1 FROM materia_comisiones mc WHERE mc.materia_id = m.materia_id)`
   ).all()
   const insertComision = db.prepare(
-    'INSERT OR IGNORE INTO materia_comisiones (materia_id, comision, docente_id) VALUES (?, ?, ?)'
+    'INSERT OR IGNORE INTO materia_comisiones (materia_id, comision) VALUES (?, ?)'
   )
   const tx1 = db.transaction(() => {
     for (const mc of sinComisiones) {
-      insertComision.run(mc.materia_id, 'A', mc.docente_id || null)
-      insertComision.run(mc.materia_id, 'B', mc.docente_id || null)
+      insertComision.run(mc.materia_id, 'A')
+      insertComision.run(mc.materia_id, 'B')
     }
   })
   tx1()
@@ -77,7 +74,7 @@ function procesar() {
   ).all()
 
   const insertHorario = db.prepare(
-    'INSERT INTO horarios (materia_id, dia_semana, hora_entrada, hora_salida, comision, docente_id) VALUES (?, ?, ?, ?, ?, ?)'
+    'INSERT INTO horarios (materia_id, dia_semana, hora_entrada, hora_salida, comision) VALUES (?, ?, ?, ?, ?)'
   )
 
   const resumen = { cursos: 0, teorica: 0, taller: 0, sinBloque: 0 }
@@ -104,7 +101,7 @@ function procesar() {
       const comisionesPorMateria = new Map()
       if (talleres.length > 0) {
         const filasCom = db.prepare(
-          `SELECT materia_id, comision, docente_id FROM materia_comisiones
+          `SELECT materia_id, comision FROM materia_comisiones
            WHERE materia_id IN (${talleres.map(() => '?').join(',')})`
         ).all(...talleres.map(m => m.materia_id))
         for (const c of filasCom) {
@@ -115,16 +112,12 @@ function procesar() {
       for (const mat of talleres) {
         const coms = comisionesPorMateria.get(mat.materia_id) || []
         if (coms.length === 0) {
-          unidades.push({ materia_id: mat.materia_id, comision: null, docente_id: mat.docente_id || null })
+          unidades.push({ materia_id: mat.materia_id, comision: null })
         } else {
           for (const c of coms) {
-            unidades.push({ materia_id: mat.materia_id, comision: c.comision, docente_id: c.docente_id || null })
+            unidades.push({ materia_id: mat.materia_id, comision: c.comision })
           }
         }
-      }
-      // Las teóricas no tienen docente en el horario (docente = null)
-      for (const u of unidades) {
-        if (u.docente_id === undefined) u.docente_id = null
       }
 
       // ----- Rango horario según el tipo de unidad -----
@@ -161,7 +154,7 @@ function procesar() {
             const key = `${dia}|${b.entrada}-${b.salida}`
             const coms = ocupado.get(key) || new Set()
             if (!puedeEntrar(coms, u.comision)) continue
-            insertHorario.run(u.materia_id, dia, b.entrada, b.salida, u.comision, u.docente_id)
+            insertHorario.run(u.materia_id, dia, b.entrada, b.salida, u.comision)
             ocupado.set(key, new Set([...coms, u.comision]))
             diasUsados.add(dia)
             diasPorMateria.set(u.materia_id, diasUsados)

@@ -2,11 +2,16 @@ import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { QRCodeCanvas } from 'qrcode.react'
 import api from '../api'
+import { useAuth } from '../context/AuthContext'
+import { turnoDeHora } from '../utils/turnos'
 
 export default function QrGenerar() {
+  const { usuario } = useAuth()
+  const turno = usuario?.turno
   const [searchParams, setSearchParams] = useSearchParams()
   const cursoId = searchParams.get('curso') || ''
   const [cursos, setCursos] = useState([])
+  const [materias, setMaterias] = useState([])
   const [tokens, setTokens] = useState([])
   const [loading, setLoading] = useState(false)
   const [mensaje, setMensaje] = useState('')
@@ -20,6 +25,20 @@ export default function QrGenerar() {
     api.get('/cursos').then(res => setCursos(res.data))
   }, [])
 
+  useEffect(() => {
+    api.get('/materias/all')
+      .then(res => setMaterias(res.data))
+      .catch(() => setMaterias([]))
+  }, [])
+
+  const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+  const hoyDia = DIAS[new Date().getDay()]
+  const cursoEnTurno = c => turno && materias.some(m =>
+    String(m.curso_id) === String(c.curso_id) &&
+    (m.horarios || []).some(h => h.dia_semana === hoyDia && turnoDeHora(h.hora_entrada) === turno)
+  )
+  const cursosDisponibles = turno ? cursos.filter(cursoEnTurno) : cursos
+
   const generar = async () => {
     if (!cursoId) return
     setLoading(true)
@@ -27,7 +46,7 @@ export default function QrGenerar() {
     try {
       const res = await api.post('/qr/tokens-por-curso', { curso_id: Number(cursoId) })
       setTokens(res.data.tokens)
-    } catch (err) {
+    } catch {
       setMensaje('Error al generar códigos')
     } finally {
       setLoading(false)
@@ -77,8 +96,6 @@ export default function QrGenerar() {
     printWindow.document.close()
   }
 
-  const curso = cursos.find(c => c.curso_id === Number(cursoId))
-
   return (
     <div>
       <h1>Generar Códigos QR</h1>
@@ -86,10 +103,10 @@ export default function QrGenerar() {
 
       <div className="filters">
         <div className="form-group">
-          <label>Curso</label>
+          <label>Curso {turno && <span className="muted">(turno {turno})</span>}</label>
           <select value={cursoId} onChange={e => cambiarCurso(e.target.value)}>
             <option value="">Seleccionar curso</option>
-            {cursos.map(c => (
+            {cursosDisponibles.map(c => (
               <option key={c.curso_id} value={c.curso_id}>{c.nombre} · {c.especialidad}</option>
             ))}
           </select>
@@ -103,6 +120,10 @@ export default function QrGenerar() {
       </div>
 
       {mensaje && <p className="error">{mensaje}</p>}
+
+      {turno && cursosDisponibles.length === 0 && (
+        <p className="notice">Hoy no hay cursos con clases en el turno {turno}.</p>
+      )}
 
       {tokens.length > 0 && (
         <>

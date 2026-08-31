@@ -1,30 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { DDL, seedCurso, seedMateria, seedAlumno } from '../helpers/inMemoryDb.js'
+import { setupTestDb, resetDb, seedCurso, seedMateria, seedAlumno } from '../helpers/inMemoryDb.js'
 
-vi.mock('../../src/db/index.js', async () => {
-  const Database = (await import('better-sqlite3')).default
-  const db = new Database(':memory:')
-  db.pragma('foreign_keys = ON')
-  db.exec(DDL)
-  return { default: db }
-})
-
-const mockedDb = (await import('../../src/db/index.js')).default
+const mockedDb = setupTestDb()
 
 import { reporteService, buildDateRange } from '../../src/services/reporteService.js'
-
-const RESET = [
-  'previas', 'asistencias', 'horarios', 'materias',
-  'alumnos_tutores', 'alumnos', 'preceptores_cursos', 'preceptores',
-  'docentes', 'cursos', 'tutores',
-]
 
 let cursoId, alumnoIds
 
 beforeEach(() => {
-  for (const t of RESET) {
-    try { mockedDb.prepare(`DELETE FROM ${t}`).run() } catch {}
-  }
+  resetDb(mockedDb)
   cursoId = seedCurso(mockedDb, { anio: 7, division: '1', especialidad: 'MMO' })
 
   alumnoIds = []
@@ -56,9 +40,19 @@ describe('reporteService', () => {
         .toEqual({ desde: '2024-09-01', hasta: '2024-09-30' })
     })
 
-    it('calcula el cuatrimestre', () => {
+    it('calcula el primer cuatrimestre (Mar-Jul, enero no es hábil)', () => {
+      expect(buildDateRange('cuatrimestre', '2024-05-15', 1))
+        .toEqual({ desde: '2024-03-01', hasta: '2024-07-30' })
+    })
+
+    it('calcula el segundo cuatrimestre (Ago-Nov)', () => {
+      expect(buildDateRange('cuatrimestre', '2024-05-15', 2))
+        .toEqual({ desde: '2024-08-01', hasta: '2024-11-30' })
+    })
+
+    it('asume el primer cuatrimestre si no se indica índice', () => {
       expect(buildDateRange('cuatrimestre', '2024-09-15'))
-        .toEqual({ desde: '2024-09-01', hasta: '2024-12-30' })
+        .toEqual({ desde: '2024-03-01', hasta: '2024-07-30' })
     })
 
     it('usa el día por defecto para tipos no conocidos', () => {
@@ -99,42 +93,41 @@ describe('reporteService', () => {
     })
   })
 
-  describe('faltasPorMateria', () => {
-    it('cuenta ausencias por materia según el horario', () => {
-      const materiaId = seedMateria(mockedDb, { cursoId, nombreMateria: 'Matemática' })
+  describe('matrizPorMateria', () => {
+    it('calcula el porcentaje de asistencia por alumno y materia sobre el historial', () => {
+      const mateId = seedMateria(mockedDb, { cursoId, nombreMateria: 'Matemática' })
+      const lenguaId = seedMateria(mockedDb, { cursoId, nombreMateria: 'Lengua' })
 
-      mockedDb.prepare(
-        `INSERT INTO horarios (materia_id, dia_semana, hora_entrada, hora_salida)
-         VALUES (?, 'Lunes', '08:00', '09:00')`
-      ).run(materiaId)
+      const upsert = mockedDb.prepare(
+        `INSERT INTO asistencias (alumno_id, materia_id, fecha, estado) VALUES (?, ?, ?, ?)`
+      )
+      upsert.run(alumnoIds[0], mateId, '2024-09-02', 'Presente')
+      upsert.run(alumnoIds[0], mateId, '2024-09-03', 'Tarde')
+      upsert.run(alumnoIds[0], mateId, '2024-09-04', 'Ausente')
+      upsert.run(alumnoIds[0], lenguaId, '2024-09-02', 'Ausente')
+      upsert.run(alumnoIds[1], mateId, '2024-09-02', 'Justificado')
 
-      mockedDb.prepare(
-        `INSERT INTO asistencias (alumno_id, materia_id, fecha, estado)
-         VALUES (?, ?, '2024-09-03', 'Ausente')`
-      ).run(alumnoIds[0], materiaId)
+      const report = reporteService.matrizPorMateria({ cursoId })
 
-      const report = reporteService.faltasPorMateria({ cursoId, desde: '2024-09-02', hasta: '2024-09-06' })
-      const fila = report.find((r) => r.alumno_id === alumnoIds[0] && r.materia_id === materiaId)
-      expect(fila.ausencias).toBe(1)
-      expect(fila.sesiones).toBe(1)
+      expect(report.materias.map((m) => m.nombre_materia)).toEqual(['Lengua', 'Matemática'])
+      expect(report.alumnos).toHaveLength(2)
+
+      const mateRow = report.alumnos[0].celdas[mateId]
+      const lenguaRow = report.alumnos[0].celdas[lenguaId]
+      // Presente + Tarde = 2 de 3 en Matemática
+      expect(mateRow).toEqual({ presentes: 2, total: 3, porcentaje: 67 })
+      expect(lenguaRow).toEqual({ presentes: 0, total: 1, porcentaje: 0 })
+
+      const mateRow2 = report.alumnos[1].celdas[mateId]
+      expect(mateRow2).toEqual({ presentes: 0, total: 1, porcentaje: 0 })
     })
 
-    it('no cuenta ausencia si el día no pertenece al horario', () => {
-      const materiaId = seedMateria(mockedDb, { cursoId, nombreMateria: 'Matemática' })
+    it('omite la materia en las celdas si el alumno no tiene registros', () => {
+      const mateId = seedMateria(mockedDb, { cursoId, nombreMateria: 'Matemática' })
+      const report = reporteService.matrizPorMateria({ cursoId })
 
-      mockedDb.prepare(
-        `INSERT INTO horarios (materia_id, dia_semana, hora_entrada, hora_salida)
-         VALUES (?, 'Miércoles', '08:00', '09:00')`
-      ).run(materiaId)
-
-      mockedDb.prepare(
-        `INSERT INTO asistencias (alumno_id, materia_id, fecha, estado)
-         VALUES (?, ?, '2024-09-03', 'Ausente')`
-      ).run(alumnoIds[0], materiaId)
-
-      const report = reporteService.faltasPorMateria({ cursoId, desde: '2024-09-02', hasta: '2024-09-06' })
-      const fila = report.find((r) => r.alumno_id === alumnoIds[0] && r.materia_id === materiaId)
-      expect(fila.ausencias).toBe(0)
+      expect(report.materias).toHaveLength(1)
+      expect(report.alumnos[0].celdas[mateId]).toBeUndefined()
     })
   })
 })

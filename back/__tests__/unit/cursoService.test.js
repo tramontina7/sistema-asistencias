@@ -1,28 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { DDL, seedCurso, seedPreceptor } from '../helpers/inMemoryDb.js'
+import { setupTestDb, resetDb, seedPreceptor } from '../helpers/inMemoryDb.js'
 
-vi.mock('../../src/db/index.js', async () => {
-  const Database = (await import('better-sqlite3')).default
-  const db = new Database(':memory:')
-  db.pragma('foreign_keys = ON')
-  db.exec(DDL)
-  return { default: db }
-})
-
-const mockedDb = (await import('../../src/db/index.js')).default
+const mockedDb = setupTestDb()
 
 import { cursoService, formatNombre } from '../../src/services/cursoService.js'
 
-const RESET = [
-  'previas', 'asistencias', 'horarios', 'materias',
-  'alumnos_tutores', 'alumnos', 'preceptores_cursos', 'preceptores',
-  'docentes', 'cursos', 'tutores',
-]
-
 beforeEach(() => {
-  for (const t of RESET) {
-    try { mockedDb.prepare(`DELETE FROM ${t}`).run() } catch {}
-  }
+  resetDb(mockedDb)
 })
 
 function insertCurso(anio, division, especialidad, turno = 'Mañana') {

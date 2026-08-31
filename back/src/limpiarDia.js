@@ -5,17 +5,10 @@ import { closeDb } from './db/close.js'
 // para borrar exactamente lo que se considera "hoy" en la base.
 const fecha = db.prepare("SELECT date('now', 'localtime') AS d").get().d
 
-const limpiar = db.transaction(() => {
-  const asistencias = db.prepare('DELETE FROM asistencias WHERE fecha = ?').run(fecha).changes
-  const retiros = db.prepare('DELETE FROM retiros WHERE fecha = ?').run(fecha).changes
-  return { asistencias, retiros }
-})
-
-const { asistencias, retiros } = limpiar()
+const asistencias = db.prepare('DELETE FROM asistencias WHERE fecha = ?').run(fecha).changes
 
 console.log(`[limpiar] fecha: ${fecha}`)
 console.log(`[limpiar] asistencias eliminadas: ${asistencias}`)
-console.log(`[limpiar] retiros eliminados: ${retiros}`)
 
 closeDb()
 process.exit(0)

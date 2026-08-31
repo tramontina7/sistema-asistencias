@@ -24,15 +24,6 @@ export const IconLogo = props => (
   </Svg>
 )
 
-export const IconPanel = props => (
-  <Svg {...props}>
-    <rect width="7" height="9" x="3" y="3" rx="1" />
-    <rect width="7" height="5" x="14" y="3" rx="1" />
-    <rect width="7" height="9" x="14" y="12" rx="1" />
-    <rect width="7" height="5" x="3" y="16" rx="1" />
-  </Svg>
-)
-
 export const IconAsistencia = props => (
   <Svg {...props}>
     <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
@@ -66,31 +57,6 @@ export const IconReportes = props => (
   </Svg>
 )
 
-export const IconPrevias = props => (
-  <Svg {...props}>
-    <path d="m17 2 4 4-4 4" />
-    <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
-    <path d="m7 22-4-4 4-4" />
-    <path d="M21 13v1a4 4 0 0 1-4 4H3" />
-  </Svg>
-)
-
-export const IconAlertas = props => (
-  <Svg {...props}>
-    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-  </Svg>
-)
-
-export const IconJornada = props => (
-  <Svg {...props}>
-    <path d="M8 2v4" />
-    <path d="M16 2v4" />
-    <rect width="18" height="18" x="3" y="4" rx="2" />
-    <path d="M3 10h18" />
-  </Svg>
-)
-
 export const IconEscanear = props => (
   <Svg {...props}>
     <path d="M3 7V5a2 2 0 0 1 2-2h2" />
@@ -120,23 +86,6 @@ export const IconLogout = props => (
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
     <path d="m16 17 5-5-5-5" />
     <path d="M21 12H9" />
-  </Svg>
-)
-
-export const IconDocentes = props => (
-  <Svg {...props}>
-    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-  </Svg>
-)
-
-export const IconRetiro = props => (
-  <Svg {...props}>
-    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M22 12h-6" />
   </Svg>
 )
 

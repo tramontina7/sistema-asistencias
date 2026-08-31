@@ -116,7 +116,6 @@ export default function Cursos() {
               <span>Materia</span>
               <span>Especialidad</span>
               <span>Tipo</span>
-              <span>Docente</span>
               <span>Horarios</span>
             </div>
             {g.materias.map(m => (
@@ -124,46 +123,6 @@ export default function Cursos() {
                 <span>{m.nombre_materia}</span>
                 <span>{m.especialidad}</span>
                 <span>{m.tipo}</span>
-                <span>
-                  {m.comisiones && m.comisiones.length > 0 ? (
-                    <span className="comisiones-docentes">
-                      {m.comisiones.map(c => (
-                        <span key={c.materia_comision_id} className="docente-comision">
-                          <strong>{c.comision}:</strong>{' '}
-                          {c.reemplazo_id ? (
-                            <span className="docente-reemplazo">
-                              {c.reemplazo_apellido}, {c.reemplazo_nombre}
-                              <span className="badge badge-suplente">Suplente</span>
-                            </span>
-                          ) : c.docente_nombre ? (
-                            <span className={c.docente_estado === 'Licencia' ? 'docente-licencia' : ''}>
-                              {c.docente_apellido}, {c.docente_nombre}
-                              {c.docente_estado === 'Licencia' && (
-                                <span className="badge badge-licencia">Licencia</span>
-                              )}
-                            </span>
-                          ) : 'Sin docente'}
-                        </span>
-                      ))}
-                    </span>
-                  ) : (
-                    <>
-                      {m.reemplazo_id ? (
-                        <span className="docente-reemplazo">
-                          {m.reemplazo_apellido}, {m.reemplazo_nombre}
-                          <span className="badge badge-suplente">Suplente</span>
-                        </span>
-                      ) : m.docente_nombre ? (
-                        <span className={m.docente_estado === 'Licencia' ? 'docente-licencia' : ''}>
-                          {m.docente_apellido}, {m.docente_nombre}
-                          {m.docente_estado === 'Licencia' && (
-                            <span className="badge badge-licencia">Licencia</span>
-                          )}
-                        </span>
-                      ) : '-'}
-                    </>
-                  )}
-                </span>
                 <span>
                   <span className="muted">{textosHorarios(m.horarios)}</span>
                   <button className="btn-small" onClick={() => abrirHorario(m.materia_id)}>Editar horario</button>

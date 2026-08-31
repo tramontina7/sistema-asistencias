@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
@@ -16,7 +16,7 @@ export default function Login() {
     setLoading(true)
     try {
       await login(username, password)
-      navigate('/dashboard')
+      navigate('/asistencia')
     } catch (err) {
       setError(err.response?.data?.error || 'Error al iniciar sesión')
     } finally {
@@ -54,9 +54,6 @@ export default function Login() {
             {loading ? 'Ingresando...' : 'Ingresar'}
           </button>
         </form>
-        <p className="login-footer-link">
-          <Link to="/alumno/login">¿Sos alumno? Ingresá acá</Link>
-        </p>
       </div>
     </div>
   )

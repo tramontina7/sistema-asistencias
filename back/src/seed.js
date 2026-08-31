@@ -2,99 +2,53 @@ import bcrypt from 'bcryptjs'
 import db from './db/index.js'
 import { encrypt } from './utils/crypto.js'
 
+const PRECEPTORES_BASE = [
+  { nombre: 'Carlos', apellido: 'Gutiérrez', dni: '11111111', telefono: '1234-5678', username: 'admin', password: 'admin123', turno: null },
+  { nombre: 'María', apellido: 'López', dni: '22222222', telefono: '2345-6789', username: 'preceptor1', password: 'preceptor123', turno: 'Tarde' },
+  { nombre: 'Juan', apellido: 'Martínez', dni: '33333333', telefono: '3456-7890', username: 'preceptor2', password: 'preceptor123', turno: 'Mañana' },
+  { nombre: 'Lucía', apellido: 'Fernández', dni: '44444444', telefono: '4567-8901', username: 'preceptor3', password: 'preceptor123', turno: 'Noche' },
+]
+
 export async function runSeed() {
   const count = db.prepare('SELECT COUNT(*) as c FROM preceptores').get().c
+
+  // Asegura los preceptores base y sus turnos (idempotente por username).
+  const hashes = {}
+  for (const u of PRECEPTORES_BASE) {
+    if (!(u.password in hashes)) {
+      hashes[u.password] = await bcrypt.hash(u.password, 12)
+    }
+  }
+  const asegurarPreceptores = db.transaction(() => {
+    const insert = db.prepare(
+      `INSERT INTO preceptores (nombre, apellido, dni_hash, dni_cif, telefono, username, password_hash, turno)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    const updateTurno = db.prepare('UPDATE preceptores SET turno = ? WHERE username = ?')
+    for (const u of PRECEPTORES_BASE) {
+      const existente = db.prepare('SELECT preceptor_id, turno FROM preceptores WHERE username = ?').get(u.username)
+      if (existente) {
+        if (existente.turno !== u.turno) updateTurno.run(u.turno, u.username)
+      } else {
+        insert.run(u.nombre, u.apellido, encrypt(u.dni), encrypt(u.dni), u.telefono, u.username, hashes[u.password], u.turno)
+      }
+    }
+  })
+  asegurarPreceptores()
+
   if (count > 0) return
 
-  const preceptorHash = await bcrypt.hash('preceptor123', 12)
-  const adminHash = await bcrypt.hash('admin123', 12)
-
-  const insertPreceptor = db.prepare(
-    `INSERT INTO preceptores (nombre, apellido, dni_hash, dni_cif, telefono, username, password_hash)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  )
-  const insertDocente = db.prepare(
-    'INSERT INTO docentes (nombre, apellido, dni_hash, dni_cif, correo, telefono) VALUES (?, ?, ?, ?, ?, ?)'
-  )
-  const insertTutor = db.prepare(
-    'INSERT INTO tutores (nombre, apellido, dni_hash, dni_cif, telefono) VALUES (?, ?, ?, ?, ?)'
-  )
   const insertCurso = db.prepare(
     'INSERT INTO cursos (anio, division, especialidad, turno) VALUES (?, ?, ?, ?)'
   )
   const insertMateria = db.prepare(
-    'INSERT INTO materias (nombre_materia, especialidad, tipo, curso_id, docente_id) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO materias (nombre_materia, especialidad, tipo, curso_id) VALUES (?, ?, ?, ?)'
   )
   const insertAlumno = db.prepare(
     'INSERT INTO alumnos (nombre, apellido, dni_hash, dni_cif, curso_id, comision) VALUES (?, ?, ?, ?, ?, ?)'
   )
-  const insertPreceptorCurso = db.prepare(
-    'INSERT INTO preceptores_cursos (preceptor_id, curso_id) VALUES (?, ?)'
-  )
-  const insertAlumnoTutor = db.prepare(
-    'INSERT INTO alumnos_tutores (alumno_id, tutor_id, parentesco, es_principal) VALUES (?, ?, ?, ?)'
-  )
 
   const tx = db.transaction(() => {
-    const p1 = insertPreceptor.run('Carlos', 'Gutiérrez', encrypt('11111111'), encrypt('11111111'), '1234-5678', 'admin', adminHash)
-    const p2 = insertPreceptor.run('María', 'López', encrypt('22222222'), encrypt('22222222'), '2345-6789', 'preceptor1', preceptorHash)
-    const p3 = insertPreceptor.run('Juan', 'Martínez', encrypt('33333333'), encrypt('33333333'), '3456-7890', 'preceptor2', preceptorHash)
-
-const d1 = insertDocente.run('Roberto', 'Fernández', encrypt('44444444'), encrypt('44444444'), 'rf@escuela.edu', '4567-8901')
-    const d2 = insertDocente.run('Ana', 'García', encrypt('55555555'), encrypt('55555555'), 'ag@escuela.edu', '5678-9012')
-    const d3 = insertDocente.run('Luis', 'Rodríguez', encrypt('66666666'), encrypt('66666666'), 'lr@escuela.edu', '6789-0123')
-
-    const t1 = insertTutor.run('Pedro', 'Pérez', encrypt('77777777'), encrypt('77777777'), '7890-1234')
-    const t2 = insertTutor.run('Laura', 'Sánchez', encrypt('88888888'), encrypt('88888888'), '8901-2345')
-
-    const insertCompetencia = db.prepare(
-      'INSERT INTO docente_materias (docente_id, nombre_materia) VALUES (?, ?)'
-    )
-    const competencias = {
-      [d1.lastInsertRowid]: [
-        'Laboratorio de Hardware',
-        'Laboratorio de Programación',
-        'Laboratorio de Aplicaciones',
-        'Laboratorio de Sistemas Operativos',
-        'Base de Datos',
-        'Teleinformática',
-        'Sistemas Digitales',
-        'Seguridad Informática',
-        'Instalación, Mantenimiento y Reparación de Redes Informáticas',
-        'Modelos y Sistemas',
-        'Programación, Diseño e Implementación de Sistemas Computacionales',
-        'Instalación, Mantenimiento y Reparación de Sistemas Computacionales',
-        'Evaluación de Proyectos',
-      ],
-      [d2.lastInsertRowid]: [
-        'Matemáticas',
-        'Matemática Ciclo Superior',
-        'Física',
-        'Química',
-        'Físico-química',
-        'Biología',
-        'Ciencias Naturales',
-        'Tecnología Electrónica',
-      ],
-      [d3.lastInsertRowid]: [
-        'Literatura',
-        'Inglés',
-        'Geografía',
-        'Historia',
-        'Educación Artística',
-        'Arte',
-        'Filosofía',
-        'Salud y Adolescencia',
-        'Derecho del Trabajo',
-        'Emprendimiento Productivo y Desarrollo Local',
-        'Prácticas del Lenguaje',
-        'Construcción de la Ciudadanía',
-      ],
-    }
-    for (const [docenteId, materias] of Object.entries(competencias)) {
-      for (const nombre of materias) insertCompetencia.run(docenteId, nombre)
-    }
-
     const CICLO_BASICO_DIVISIONES = {
       1: ['1', '2', '5', '7'],
       2: ['1', '2', '5', '7'],
@@ -132,9 +86,6 @@ const d1 = insertDocente.run('Roberto', 'Fernández', encrypt('44444444'), encry
     const c4to5 = cInfo[4].find(c => c.division === '5').id
     const c6to4 = cInfo[6].find(c => c.division === '4').id
     const c7mo2 = cInfo[7].find(c => c.division === '2').id
-
-    insertPreceptorCurso.run(p2.lastInsertRowid, cbCursos[1]['1'])
-    insertPreceptorCurso.run(p2.lastInsertRowid, cbCursos[1]['2'])
 
     const CURRICULUM = {
       1: {
@@ -201,7 +152,7 @@ const d1 = insertDocente.run('Roberto', 'Fernández', encrypt('44444444'), encry
       const plan = CURRICULUM[anio]
       for (const tipo of Object.keys(plan)) {
         for (const nombre of plan[tipo]) {
-          insertMateria.run(nombre, 'Ciclo Básico', tipo, cursoId, null)
+          insertMateria.run(nombre, 'Ciclo Básico', tipo, cursoId)
         }
       }
     }
@@ -278,7 +229,7 @@ const d1 = insertDocente.run('Roberto', 'Fernández', encrypt('44444444'), encry
         const plan = MATERIAS_INF[anio]
         for (const tipo of Object.keys(plan)) {
           for (const nombre of plan[tipo]) {
-            insertMateria.run(nombre, 'Informática', tipo, id, null)
+            insertMateria.run(nombre, 'Informática', tipo, id)
           }
         }
       }
@@ -297,13 +248,9 @@ const d1 = insertDocente.run('Roberto', 'Fernández', encrypt('44444444'), encry
       ['Emma', 'Ruiz', '90000010', cbCursos[1]['1'], 'B'],
     ]
 
-    const alumnoIds = alumnos.map(([n, a, dni, cid, com]) =>
-      insertAlumno.run(n, a, encrypt(dni), encrypt(dni), cid, com).lastInsertRowid
-    )
-
-    insertAlumnoTutor.run(alumnoIds[0], t1.lastInsertRowid, 'Madre', 1)
-    insertAlumnoTutor.run(alumnoIds[0], t2.lastInsertRowid, 'Padre', 0)
-    insertAlumnoTutor.run(alumnoIds[1], t1.lastInsertRowid, 'Padre', 1)
+    for (const [n, a, dni, cid, com] of alumnos) {
+      insertAlumno.run(n, a, encrypt(dni), encrypt(dni), cid, com)
+    }
   })
 
   tx()

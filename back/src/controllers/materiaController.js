@@ -21,19 +21,19 @@ export const materiaController = {
   },
 
   create(req, res) {
-    const { curso_id, nombre_materia, especialidad, tipo, docente_id } = req.body
+    const { curso_id, nombre_materia, especialidad, tipo } = req.body
     if (!curso_id || !nombre_materia) throw new HttpError(400, 'curso_id y nombre_materia requeridos')
     res.status(201).json(
-      materiaService.create({ cursoId: curso_id, nombreMateria: nombre_materia, especialidad, tipo, docenteId: docente_id })
+      materiaService.create({ cursoId: curso_id, nombreMateria: nombre_materia, especialidad, tipo })
     )
   },
 
   update(req, res) {
-    const { nombre_materia, especialidad, tipo, docente_id } = req.body
-    if (nombre_materia === undefined && especialidad === undefined && tipo === undefined && docente_id === undefined) {
+    const { nombre_materia, especialidad, tipo } = req.body
+    if (nombre_materia === undefined && especialidad === undefined && tipo === undefined) {
       throw new HttpError(400, 'No hay campos para actualizar')
     }
-    res.json(materiaService.update(req.params.id, { nombreMateria: nombre_materia, especialidad, tipo, docenteId: docente_id }))
+    res.json(materiaService.update(req.params.id, { nombreMateria: nombre_materia, especialidad, tipo }))
   },
 
   setHorarios(req, res) {

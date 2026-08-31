@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../api'
+import { useAuth } from '../context/AuthContext'
 import { fechaLocal } from '../utils/fechas'
+import { turnoDeHora } from '../utils/turnos'
 
 const ESTADOS = ['Presente', 'Ausente']
 
@@ -24,6 +26,8 @@ const claseEstado = (estado) => {
 }
 
 export default function Asistencia() {
+  const { usuario } = useAuth()
+  const turno = usuario?.turno
   const [searchParams, setSearchParams] = useSearchParams()
   const cursoId = searchParams.get('curso') || ''
   const materiaId = searchParams.get('materia') || ''
@@ -34,11 +38,11 @@ export default function Asistencia() {
   const [comisiones, setComisiones] = useState([])
   const [estados, setEstados] = useState({})
   const [asistenciaIds, setAsistenciaIds] = useState({})
+  const [motivos, setMotivos] = useState({})
   const [cambios, setCambios] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(false)
   const [mensaje, setMensaje] = useState('')
-  const [ausentesHoy, setAusentesHoy] = useState(new Set())
 
   const cambiarCurso = (id) => {
     setSearchParams(id ? { curso: id } : {}, { replace: true })
@@ -73,22 +77,24 @@ export default function Asistencia() {
   const materiasDelCurso = cursoId ? materias.filter(m => String(m.curso_id) === String(cursoId)) : []
   const materiaConDia = m => (m.horarios || []).some(h => h.dia_semana === hoyDia)
   const materiasDelDia = materiasDelCurso.filter(materiaConDia)
+  const materiaEnTurno = m => (m.horarios || []).some(h => h.dia_semana === hoyDia && turnoDeHora(h.hora_entrada) === turno)
+  const materiasDelTurno = materiasDelDia.filter(materiaEnTurno)
+  // Con turno asignado solo se ofrecen materias de ese turno; sin turno se ven todas (modo admin/prueba).
+  const materiasDisponibles = turno
+    ? (materiasDelTurno.length > 0 ? materiasDelTurno : materiasDelDia)
+    : (materiasDelDia.length > 0 ? materiasDelDia : materiasDelCurso)
+  const cursoEnTurno = c => materias.some(m => String(m.curso_id) === String(c.curso_id) && materiaEnTurno(m))
+  const cursosDisponibles = turno ? cursos.filter(cursoEnTurno) : cursos
   const franjaDeHoy = m => (m.horarios || []).find(h => h.dia_semana === hoyDia)
   const enFranjaAhora = m => {
     const f = franjaDeHoy(m)
     return f && f.hora_entrada <= horaActual && horaActual <= f.hora_salida
   }
-  const materiaAutodet = materiasDelDia.find(enFranjaAhora) || materiasDelDia[0]
+  const materiaAutodet = materiasDisponibles.find(enFranjaAhora) || materiasDisponibles[0]
 
   useEffect(() => {
     api.get('/cursos').then(res => setCursos(res.data))
   }, [])
-
-  useEffect(() => {
-    api.get('/docentes/ausencias', { params: { fecha: hoy } })
-      .then(res => setAusentesHoy(new Set(res.data.map(a => a.docente_id))))
-      .catch(() => setAusentesHoy(new Set()))
-  }, [hoy])
 
   useEffect(() => {
     api.get('/materias/all')
@@ -96,7 +102,8 @@ export default function Asistencia() {
       .catch(() => setMaterias([]))
   }, [])
 
-  const materiasDiaKey = materiasDelDia.map(m => String(m.materia_id)).join(',')
+  const materiasDiaKey = materiasDisponibles.map(m => String(m.materia_id)).join(',')
+  const cursoDisponibleKey = cursosDisponibles.map(c => String(c.curso_id)).join(',')
   const autodetId = materiaAutodet ? String(materiaAutodet.materia_id) : ''
 
   useEffect(() => {
@@ -109,6 +116,11 @@ export default function Asistencia() {
         delete next.comision
         changed = true
       }
+    } else if (turno && !cursosDisponibles.some(c => String(c.curso_id) === String(cursoId))) {
+      delete next.curso
+      delete next.materia
+      delete next.comision
+      changed = true
     } else if (!materiasDiaKey.split(',').includes(String(params.materia))) {
       if (autodetId) next.materia = autodetId
       else delete next.materia
@@ -116,7 +128,8 @@ export default function Asistencia() {
       changed = true
     }
     if (changed) setSearchParams(next, { replace: true })
-  }, [cursoId, materiasDiaKey, autodetId, searchParams, setSearchParams])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cursoId, materiasDiaKey, cursoDisponibleKey, autodetId, searchParams, setSearchParams, turno])
 
   const cargarDatos = useCallback(async () => {
     if (!materiaId) return
@@ -131,12 +144,15 @@ export default function Asistencia() {
       setComisiones([...new Set(resAlumnos.data.map(a => a.comision).filter(Boolean))])
       const map = {}
       const ids = {}
+      const m = {}
       resAsis.data.forEach(a => {
         map[a.alumno_id] = a.estado
         ids[a.alumno_id] = a.asistencia_id
+        if (a.estado === 'Tarde' && a.motivo_tarde) m[a.alumno_id] = a.motivo_tarde
       })
       setEstados(map)
       setAsistenciaIds(ids)
+      setMotivos(m)
       setCambios(false)
     } catch {
       setMensaje('Error al cargar datos')
@@ -151,7 +167,6 @@ export default function Asistencia() {
   }, [materiaId, cargarDatos])
 
   const toggleEstado = (alumnoId) => {
-    if (docenteAusenteHoy) return
     setEstados(prev => {
       const actual = prev[alumnoId]
       let next
@@ -173,6 +188,11 @@ export default function Asistencia() {
     setCambios(true)
   }
 
+  const cambiarMotivo = (alumnoId, texto) => {
+    setMotivos(prev => ({ ...prev, [alumnoId]: texto }))
+    setCambios(true)
+  }
+
   const guardar = async () => {
     if (!materiaId) return
     const marcados = Object.keys(estados).length
@@ -183,6 +203,7 @@ export default function Asistencia() {
       const asistencias = Object.entries(estados).map(([alumno_id, estado]) => ({
         alumno_id: Number(alumno_id),
         estado,
+        ...(estado === 'Tarde' ? { motivo: (motivos[alumno_id] || '').trim() || undefined } : {}),
       }))
       await api.post('/asistencias/tomar', { materia_id: materiaId, fecha: hoy, asistencias })
       setMensaje('Asistencia guardada')
@@ -197,35 +218,9 @@ export default function Asistencia() {
 
   const materia = materias.find(m => String(m.materia_id) === String(materiaId))
   const esDivision = materia && materia.tipo && materia.tipo !== 'Teoría'
-  const comisionSel = esDivision && comision
-    ? (materia.comisiones || []).find(c => String(c.comision) === String(comision))
-    : undefined
-  const docenteLinea = esDivision && comision
-    ? (comisionSel && (comisionSel.docente_nombre || comisionSel.reemplazo_id)
-        ? {
-            nombre: comisionSel.docente_nombre,
-            apellido: comisionSel.docente_apellido,
-            estado: comisionSel.docente_estado,
-            reemplazo_id: comisionSel.reemplazo_id,
-            reemplazo_nombre: comisionSel.reemplazo_nombre,
-            reemplazo_apellido: comisionSel.reemplazo_apellido,
-          }
-        : null)
-    : materia
   const alumnosVisibles = esDivision && comision
     ? alumnos.filter(a => a.comision === comision)
     : alumnos
-
-  const titularId = esDivision && comision
-    ? (comisionSel && comisionSel.docente_id) || null
-    : (materia && materia.docente_id) || null
-  const reemplazoId = esDivision && comision
-    ? (comisionSel && comisionSel.reemplazo_id) || null
-    : (materia && materia.reemplazo_id) || null
-  const docenteAusenteHoy = !!(titularId && ausentesHoy.has(titularId) && !reemplazoId)
-  const titularMensaje = esDivision && comision
-    ? (comisionSel && `${comisionSel.docente_nombre || ''} ${comisionSel.docente_apellido || ''}`.trim())
-    : (materia && `${materia.docente_nombre || ''} ${materia.docente_apellido || ''}`.trim())
 
   return (
     <div>
@@ -233,10 +228,10 @@ export default function Asistencia() {
 
       <div className="filters">
         <div className="form-group">
-          <label>Curso</label>
+          <label>Curso {turno && <span className="muted">(turno {turno})</span>}</label>
           <select value={cursoId} onChange={e => cambiarCurso(e.target.value)}>
             <option value="">Seleccionar curso</option>
-            {cursos.map(c => (
+            {cursosDisponibles.map(c => (
               <option key={c.curso_id} value={c.curso_id}>{c.nombre} · {c.especialidad}</option>
             ))}
           </select>
@@ -246,14 +241,14 @@ export default function Asistencia() {
           <select
             value={materiaId}
             onChange={e => cambiarMateria(e.target.value)}
-            disabled={!cursoId || materiasDelDia.length === 0}
+            disabled={!cursoId || materiasDisponibles.length === 0}
           >
             <option value="">
-              {cursoId && materiasDelDia.length === 0
-                ? 'No hay materias con clase hoy'
+              {cursoId && materiasDisponibles.length === 0
+                ? (turno ? 'No hay materias de este turno hoy' : 'Seleccionar materia (hoy sin horario)')
                 : 'Seleccionar materia'}
             </option>
-            {materiasDelDia.map(m => (
+            {materiasDisponibles.map(m => (
               <option key={m.materia_id} value={m.materia_id}>{m.nombre_materia}</option>
             ))}
           </select>
@@ -276,29 +271,18 @@ export default function Asistencia() {
           Fecha: <strong>{formatFecha(hoy)}</strong>
           {' · '}{materia.nombre_materia}
           {(() => { const f = franjaDeHoy(materia); return f ? ` (${hoyDia} ${f.hora_entrada}–${f.hora_salida}${enFranjaAhora(materia) ? ' · ahora' : ''})` : '' })()}
-          {docenteLinea?.docente_nombre && <> — {docenteLinea.docente_nombre} {docenteLinea.docente_apellido}</>}
-          {docenteLinea && (docenteLinea.reemplazo_nombre || docenteLinea.reemplazo_apellido) &&
-            <> · Reemplazo: {docenteLinea.reemplazo_nombre} {docenteLinea.reemplazo_apellido}</>}
-        </p>
-      )}
-
-      {materia && docenteAusenteHoy && (
-        <p className="notice">
-          El docente {titularMensaje} está ausente hoy; no se puede tomar asistencia para esta materia.
-        </p>
-      )}
-
-      {materia && docenteLinea && docenteLinea.docente_estado === 'Licencia' && !docenteLinea.reemplazo_id && (
-        <p className="notice">
-          El docente está de licencia y esta materia no tiene reemplazante asignado.
         </p>
       )}
 
       {loading && <p className="loading">Cargando...</p>}
 
-      {!loading && cursoId && materiasDelDia.length === 0 && (
+      {!loading && turno && cursosDisponibles.length === 0 && (
+        <p className="notice">Hoy no hay cursos con clases en el turno {turno}. Sin turno asignado se verían todos los cursos.</p>
+      )}
+
+      {!loading && cursoId && !turno && materiasDelDia.length === 0 && (
         <p className="notice">
-          No hay materias con clase para este curso hoy. No se puede tomar asistencia.
+          Hoy ({hoyDia.toLowerCase()}) no hay materias con horario cargado; se muestran todas las materias del curso (modo prueba).
         </p>
       )}
 
@@ -308,7 +292,7 @@ export default function Asistencia() {
             <button
               className="btn-primary"
               onClick={guardar}
-              disabled={saving || docenteAusenteHoy || !cambios || Object.keys(estados).length === 0}
+              disabled={saving || !cambios || Object.keys(estados).length === 0}
             >
               {saving ? 'Guardando...' : 'Guardar Asistencia'}
             </button>
@@ -329,6 +313,18 @@ export default function Asistencia() {
                       {estado ? ETIQUETA[estado] : (registrado ? ETIQUETA[asistenciaIds[alumno.alumno_id] ? estado : ''] || '-' : 'Sin marcar')}
                     </span>
                   </div>
+                  {estado === 'Tarde' && (
+                    <div className="toma-motivo-wrap">
+                      <input
+                        className="toma-motivo"
+                        type="text"
+                        placeholder="Motivo de la llegada tarde (opcional)"
+                        value={motivos[alumno.alumno_id] || ''}
+                        onClick={e => e.stopPropagation()}
+                        onChange={e => cambiarMotivo(alumno.alumno_id, e.target.value)}
+                      />
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -349,7 +345,7 @@ export default function Asistencia() {
       {!materiaId && (
         <p className="empty">
           {cursoId
-            ? (materiasDelDia.length === 0 ? 'No hay materias con clase para hoy.' : 'Seleccioná una materia para comenzar')
+            ? (materiasDisponibles.length === 0 ? 'Este curso no tiene materias.' : 'Seleccioná una materia para comenzar')
             : 'Seleccioná un curso para comenzar'}
         </p>
       )}

@@ -27,9 +27,14 @@ export const asistenciaController = {
   },
 
   updateEstado(req, res) {
-    const { estado, motivo } = req.body
+    const { estado, motivo, hora_ingreso, motivo_tarde } = req.body
     if (!estado) throw new HttpError(400, 'Estado requerido')
-    asistenciaService.updateEstado(req.params.id, { estado, motivo })
+    asistenciaService.updateEstado(req.params.id, {
+      estado,
+      motivo,
+      horaIngreso: hora_ingreso,
+      motivoTarde: motivo_tarde,
+    })
     res.json({ mensaje: 'Asistencia actualizada' })
   },
 }

@@ -1,32 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { DDL, seedCurso } from '../helpers/inMemoryDb.js'
+import { setupTestDb, resetDb, seedCurso, seedMateria, seedAsistencia } from '../helpers/inMemoryDb.js'
 
-vi.mock('../../src/db/index.js', async () => {
-  const Database = (await import('better-sqlite3')).default
-  const db = new Database(':memory:')
-  db.pragma('foreign_keys = ON')
-  db.exec(DDL)
-  return { default: db }
-})
-
-const mockedDb = (await import('../../src/db/index.js')).default
+const mockedDb = setupTestDb()
 
 import { alumnoService } from '../../src/services/alumnoService.js'
 import { HttpError } from '../../src/utils/http-error.js'
 import { decrypt } from '../../src/utils/crypto.js'
 
-const RESET = [
-  'previas', 'asistencias', 'horarios', 'materias',
-  'alumnos_tutores', 'alumnos', 'preceptores_cursos', 'preceptores',
-  'docentes', 'cursos', 'tutores',
-]
-
 let cursoId
 
 beforeEach(() => {
-  for (const t of RESET) {
-    try { mockedDb.prepare(`DELETE FROM ${t}`).run() } catch {}
-  }
+  resetDb(mockedDb)
   cursoId = seedCurso(mockedDb, { anio: 7, division: '1', especialidad: 'MMO' })
 })
 
@@ -76,6 +60,31 @@ describe('alumnoService', () => {
       const rows = alumnoService.list({ cursoId, comision: 'A' })
       expect(rows).toHaveLength(1)
       expect(rows[0].comision).toBe('A')
+    })
+  })
+
+  describe('perfil', () => {
+    it('devuelve datos, curso con turno y últimas 5 asistencias', () => {
+      const creado = alumnoService.create({ nombre: 'Ana', apellido: 'López', dni: '40213456', cursoId, comision: 'A' })
+      const materiaId = seedMateria(mockedDb, { cursoId, nombreMateria: 'Matemática' })
+      seedAsistencia(mockedDb, { alumnoId: creado.alumno_id, materiaId, fecha: '2024-09-01', estado: 'Presente' })
+      seedAsistencia(mockedDb, { alumnoId: creado.alumno_id, materiaId, fecha: '2024-09-02', estado: 'Tarde', horaIngreso: '08:05:00' })
+      seedAsistencia(mockedDb, { alumnoId: creado.alumno_id, materiaId, fecha: '2024-09-03', estado: 'Ausente' })
+
+      const perfil = alumnoService.perfil(creado.alumno_id)
+      expect(perfil.dni).toBe('40213456')
+      expect(perfil.curso.turno).toBe('Mañana')
+      expect(perfil.curso.nombre).toBeTruthy()
+      expect(perfil.ultimas).toHaveLength(3)
+      expect(perfil.ultimas[0].fecha).toBe('2024-09-03')
+      const tarde = perfil.ultimas.find(u => u.estado === 'Tarde')
+      expect(tarde.hora_ingreso).toBe('08:05:00')
+      expect(perfil.totales.total).toBe(3)
+      expect(perfil.totales.tardanzas).toBe(1)
+    })
+
+    it('lanza HttpError 404 si el alumno no existe', () => {
+      expect(() => alumnoService.perfil(999)).toThrow(new HttpError(404, 'Alumno no encontrado'))
     })
   })
 

@@ -53,13 +53,4 @@ export const qrService = {
       token: signQrToken({ alumno_id: a.alumno_id }),
     }))
   },
-
-  alumno(alumnoId) {
-    const alumno = db.prepare(
-      'SELECT alumno_id, nombre, apellido, curso_id FROM alumnos WHERE alumno_id = ?'
-    ).get(alumnoId)
-    if (!alumno) throw new HttpError(404, 'Alumno no encontrado')
-
-    return { token: signQrToken({ alumno_id: alumno.alumno_id }), alumno }
-  },
 }

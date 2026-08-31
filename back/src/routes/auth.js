@@ -6,6 +6,5 @@ const router = Router()
 
 router.post('/login', authController.login)
 router.get('/me', authenticate, authController.me)
-router.post('/alumno/login', authController.loginAlumno)
 
 export default router

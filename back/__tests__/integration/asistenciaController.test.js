@@ -16,7 +16,6 @@ vi.mock('../../src/middlewares/auth.js', () => ({
     req.usuario = { id: 1, rol: 'preceptor' }
     next()
   }),
-  authenticateAlumno: vi.fn((_req, _res, next) => next()),
 }))
 
 import createApp from '../../src/app.js'
@@ -81,7 +80,12 @@ describe('PUT /api/asistencias/:id', () => {
     const res = await request(app).put('/api/asistencias/5').set(AUTH).send({ estado: 'Ausente' })
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ mensaje: 'Asistencia actualizada' })
-    expect(asistenciaService.updateEstado).toHaveBeenCalledWith('5', { estado: 'Ausente', motivo: undefined })
+    expect(asistenciaService.updateEstado).toHaveBeenCalledWith('5', {
+      estado: 'Ausente',
+      motivo: undefined,
+      horaIngreso: undefined,
+      motivoTarde: undefined,
+    })
   })
 
   it('devuelve 400 sin estado', async () => {

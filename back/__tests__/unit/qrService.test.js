@@ -1,31 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { DDL, seedCurso, seedAlumno } from '../helpers/inMemoryDb.js'
+import { setupTestDb, resetDb, seedCurso, seedAlumno } from '../helpers/inMemoryDb.js'
 
-vi.mock('../../src/db/index.js', async () => {
-  const Database = (await import('better-sqlite3')).default
-  const db = new Database(':memory:')
-  db.pragma('foreign_keys = ON')
-  db.exec(DDL)
-  return { default: db }
-})
-
-const mockedDb = (await import('../../src/db/index.js')).default
+const mockedDb = setupTestDb()
 
 import { qrService } from '../../src/services/qrService.js'
 import { HttpError } from '../../src/utils/http-error.js'
 
-const RESET = [
-  'previas', 'asistencias', 'horarios', 'materias',
-  'alumnos_tutores', 'alumnos', 'preceptores_cursos', 'preceptores',
-  'docentes', 'cursos', 'tutores',
-]
-
 let cursoId, alumnoIds
 
 beforeEach(() => {
-  for (const t of RESET) {
-    try { mockedDb.prepare(`DELETE FROM ${t}`).run() } catch {}
-  }
+  resetDb(mockedDb)
   cursoId = seedCurso(mockedDb, { anio: 7, division: '1', especialidad: 'MMO' })
 
   alumnoIds = []
@@ -63,14 +47,14 @@ describe('qrService', () => {
 
   describe('escanear', () => {
     it('valida el token y devuelve el alumno', () => {
-      const { token } = qrService.alumno(alumnoIds[0])
+      const { token } = qrService.generarTokens(alumnoIds[0])[0]
       const result = qrService.escanear({ token, fecha: undefined })
       expect(result.alumno.alumno_id).toBe(alumnoIds[0])
       expect(result.fecha).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     })
 
     it('usa la fecha provista', () => {
-      const { token } = qrService.alumno(alumnoIds[0])
+      const { token } = qrService.generarTokens(alumnoIds[0])[0]
       const result = qrService.escanear({ token, fecha: '2024-09-02' })
       expect(result.fecha).toBe('2024-09-02')
     })
@@ -81,7 +65,7 @@ describe('qrService', () => {
     })
 
     it('lanza HttpError 404 si el alumno no existe', () => {
-      const { token } = qrService.alumno(alumnoIds[0])
+      const { token } = qrService.generarTokens(alumnoIds[0])[0]
       mockedDb.prepare('DELETE FROM alumnos WHERE alumno_id = ?').run(alumnoIds[0])
       expect(() => qrService.escanear({ token, fecha: undefined }))
         .toThrow(new HttpError(404, 'Alumno no encontrado'))
@@ -93,18 +77,6 @@ describe('qrService', () => {
       const tokens = qrService.tokensPorCurso(cursoId)
       expect(tokens.map((t) => t.id).sort()).toEqual([...alumnoIds].sort())
       expect(tokens[0].token).toBeTruthy()
-    })
-  })
-
-  describe('alumno', () => {
-    it('devuelve token y alumno', () => {
-      const result = qrService.alumno(alumnoIds[0])
-      expect(result.alumno.alumno_id).toBe(alumnoIds[0])
-      expect(result.token).toBeTruthy()
-    })
-
-    it('lanza HttpError 404 si no existe', () => {
-      expect(() => qrService.alumno(500)).toThrow(new HttpError(404, 'Alumno no encontrado'))
     })
   })
 })

@@ -11,6 +11,10 @@ export const alumnoController = {
     res.json(alumnoService.getById(req.params.id))
   },
 
+  perfil(req, res) {
+    res.json(alumnoService.perfil(req.params.id))
+  },
+
   create(req, res) {
     const { nombre, apellido, dni, curso_id, comision } = req.body
     if (!nombre || !apellido || !dni || !curso_id || !comision) {

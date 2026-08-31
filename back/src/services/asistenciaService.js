@@ -4,6 +4,11 @@ import { HttpError } from '../utils/http-error.js'
 
 const ESTADOS_MANUALES = ['Presente', 'Ausente', 'Tarde']
 
+function horaMarcada(date = new Date()) {
+  const p = (n) => String(n).padStart(2, '0')
+  return `${p(date.getHours())}:${p(date.getMinutes())}:${p(date.getSeconds())}`
+}
+
 export const asistenciaService = {
   ESTADOS_MANUALES,
 
@@ -21,19 +26,33 @@ export const asistenciaService = {
       if (!ESTADOS_MANUALES.includes(a.estado)) {
         throw new HttpError(400, `Estado no permitido: ${a.estado}`)
       }
-      porAlumno.set(a.alumno_id, a.estado)
+      const esTarde = a.estado === 'Tarde'
+      const horaIngreso = esTarde ? horaMarcada() : null
+      const motivoTarde = esTarde ? (a.motivo || null) : null
+      porAlumno.set(a.alumno_id, { estado: a.estado, horaIngreso, motivoTarde })
     }
 
+    // Al marcar Tarde se registra la hora de llegada y un motivo opcional.
+    // Al pasar a un estado que no es Tarde se CONSERVA la hora y el motivo de
+    // la llegada tarde (la información de la asistencia original no se pierde).
     const upsert = db.prepare(
-      `INSERT INTO asistencias (alumno_id, materia_id, fecha, estado)
-       VALUES (?, ?, ?, ?)
+      `INSERT INTO asistencias (alumno_id, materia_id, fecha, estado, hora_ingreso, motivo_tarde)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(alumno_id, materia_id, fecha) DO UPDATE
-         SET estado = excluded.estado`
+         SET estado = excluded.estado,
+             hora_ingreso = CASE
+               WHEN excluded.estado = 'Tarde' THEN excluded.hora_ingreso
+               ELSE hora_ingreso
+             END,
+             motivo_tarde = CASE
+               WHEN excluded.estado = 'Tarde' THEN COALESCE(excluded.motivo_tarde, motivo_tarde)
+               ELSE motivo_tarde
+             END`
     )
 
     const tx = db.transaction(() => {
-      for (const [alumnoId, estado] of porAlumno) {
-        upsert.run(alumnoId, materiaId, fecha, estado)
+      for (const [alumnoId, { estado, horaIngreso, motivoTarde }] of porAlumno) {
+        upsert.run(alumnoId, materiaId, fecha, estado, horaIngreso, motivoTarde)
       }
     })
     tx()
@@ -43,7 +62,7 @@ export const asistenciaService = {
     if (!materiaId || !fecha) throw new HttpError(400, 'materia_id y fecha requeridos')
 
     return db.prepare(
-      `SELECT a.asistencia_id, a.alumno_id, a.estado, a.fecha, a.motivo,
+      `SELECT a.asistencia_id, a.alumno_id, a.estado, a.fecha, a.motivo, a.hora_ingreso, a.motivo_tarde,
               al.nombre, al.apellido
        FROM asistencias a
        JOIN alumnos al ON al.alumno_id = a.alumno_id
@@ -52,11 +71,30 @@ export const asistenciaService = {
     ).all(materiaId, fecha)
   },
 
-  updateEstado(asistenciaId, { estado, motivo }) {
-    const updMotivo = estado === 'Justificado' ? (motivo || null) : null
+  updateEstado(asistenciaId, { estado, motivo, horaIngreso, motivoTarde }) {
+    const actual = db.prepare('SELECT * FROM asistencias WHERE asistencia_id = ?').get(asistenciaId)
+
+    let nuevoEstado = estado
+    let nuevoMotivo = actual ? actual.motivo : null
+    let nuevaHora = actual ? actual.hora_ingreso : null
+    let nuevoMotivoTarde = actual ? actual.motivo_tarde : null
+
+    if (estado === 'Tarde') {
+      // Se registra la hora actual si no se provee una, y el motivo opcional.
+      nuevaHora = horaIngreso || horaMarcada()
+      nuevoMotivoTarde = motivoTarde !== undefined ? (motivoTarde || null) : (actual?.motivo_tarde ?? null)
+      nuevoMotivo = null
+    } else if (estado === 'Justificado') {
+      nuevoMotivo = motivo || null
+      // Se conservan hora_ingreso y motivo_tarde de la llegada si los hubiera.
+    } else {
+      // Presente / Ausente: se conservan hora_ingreso y motivo_tarde.
+      nuevoMotivo = null
+    }
+
     db.prepare(
-      'UPDATE asistencias SET estado = ?, motivo = ? WHERE asistencia_id = ?'
-    ).run(estado, updMotivo, asistenciaId)
+      'UPDATE asistencias SET estado = ?, motivo = ?, hora_ingreso = ?, motivo_tarde = ? WHERE asistencia_id = ?'
+    ).run(nuevoEstado, nuevoMotivo, nuevaHora, nuevoMotivoTarde, asistenciaId)
   },
 
   materiaDelMomento({ cursoId, ahora }) {
@@ -73,7 +111,19 @@ export const asistenciaService = {
     ).all(cursoId, dia)
 
     if (materiasDia.length === 0) {
-      throw new HttpError(400, 'El alumno no cursa ninguna materia en este horario')
+      // Fallback temporal (modo prueba): si el día no tiene horarios (p.ej. sábado),
+      // se toma la primera materia del curso.
+      const cualquier = db.prepare(
+        `SELECT m.materia_id, m.nombre_materia
+         FROM materias m
+         WHERE m.curso_id = ?
+         ORDER BY m.materia_id
+         LIMIT 1`
+      ).get(cursoId)
+      if (!cualquier) {
+        throw new HttpError(400, 'El alumno no cursa ninguna materia')
+      }
+      return { materia_id: cualquier.materia_id, nombre_materia: cualquier.nombre_materia }
     }
 
     const match = materiasDia.find(
@@ -93,15 +143,14 @@ export const asistenciaService = {
     const materia = db.prepare('SELECT materia_id FROM materias WHERE materia_id = ?').get(materiaId)
     if (!materia) throw new HttpError(404, 'Materia no encontrada')
 
-    const p = (n) => String(n).padStart(2, '0')
-    const horaLograda = `${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`
+    const horaLograda = horaMarcada(now)
 
     db.prepare(
-      `INSERT INTO asistencias (alumno_id, materia_id, fecha, estado, motivo)
-       VALUES (?, ?, ?, 'Tarde', ?)
+      `INSERT INTO asistencias (alumno_id, materia_id, fecha, estado, motivo, hora_ingreso)
+       VALUES (?, ?, ?, 'Tarde', ?, ?)
        ON CONFLICT(alumno_id, materia_id, fecha) DO UPDATE
-         SET estado = excluded.estado, motivo = excluded.motivo`
-    ).run(alumnoId, materiaId, fecha, `QR escaneado a las ${horaLograda}`)
+         SET estado = excluded.estado, motivo = excluded.motivo, hora_ingreso = excluded.hora_ingreso`
+    ).run(alumnoId, materiaId, fecha, `QR escaneado a las ${horaLograda}`, horaLograda)
 
     return { estado: 'Tarde', hora: horaLograda }
   },

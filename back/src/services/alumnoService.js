@@ -1,6 +1,7 @@
 import db from '../db/index.js'
 import { encrypt, decrypt } from '../utils/crypto.js'
 import { HttpError } from '../utils/http-error.js'
+import { formatNombre } from './cursoService.js'
 
 const BASE_SELECT =
   'SELECT alumno_id, nombre, apellido, dni_cif, curso_id, comision FROM alumnos'
@@ -38,6 +39,45 @@ export const alumnoService = {
     ).get(alumnoId)
     if (!row) throw new HttpError(404, 'Alumno no encontrado')
     return toPublic(row)
+  },
+
+  perfil(alumnoId) {
+    const alumno = db.prepare(
+      `${BASE_SELECT} WHERE alumno_id = ?`
+    ).get(alumnoId)
+    if (!alumno) throw new HttpError(404, 'Alumno no encontrado')
+
+    const curso = db.prepare(
+      'SELECT curso_id, anio, division, especialidad, turno FROM cursos WHERE curso_id = ?'
+    ).get(alumno.curso_id)
+
+    const ultimas = db.prepare(
+      `SELECT a.asistencia_id, a.fecha, a.estado, a.motivo, a.hora_ingreso, a.motivo_tarde,
+              m.materia_id, m.nombre_materia
+       FROM asistencias a
+       JOIN materias m ON m.materia_id = a.materia_id
+       WHERE a.alumno_id = ?
+       ORDER BY a.fecha DESC, a.asistencia_id DESC
+       LIMIT 5`
+    ).all(alumnoId)
+
+    const totales = db.prepare(
+      `SELECT
+         COUNT(*) AS total,
+         COUNT(CASE WHEN estado = 'Presente' THEN 1 END) AS presentes,
+         COUNT(CASE WHEN estado = 'Ausente' THEN 1 END) AS ausencias,
+         COUNT(CASE WHEN estado = 'Tarde' THEN 1 END) AS tardanzas,
+         COUNT(CASE WHEN estado = 'Justificado' THEN 1 END) AS justificados
+       FROM asistencias
+       WHERE alumno_id = ?`
+    ).get(alumnoId)
+
+    return {
+      ...toPublic(alumno),
+      curso: curso ? { curso_id: curso.curso_id, nombre: formatNombre(curso), especialidad: curso.especialidad, turno: curso.turno } : null,
+      ultimas,
+      totales: totales || { total: 0, presentes: 0, ausencias: 0, tardanzas: 0, justificados: 0 },
+    }
   },
 
   create({ nombre, apellido, dni, cursoId, comision }) {

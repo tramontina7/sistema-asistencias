@@ -37,14 +37,6 @@ export function createApp() {
       message: { error: 'Demasiados intentos de login, espere un minuto' },
     })
   )
-  app.use(
-    '/api/auth/alumno/login',
-    rateLimit({
-      windowMs: 60 * 1000,
-      max: 10,
-      message: { error: 'Demasiados intentos, espere un minuto' },
-    })
-  )
 
   // Rutas de la API
   app.use('/api', apiRoutes)

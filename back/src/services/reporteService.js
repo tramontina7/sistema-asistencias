@@ -12,7 +12,7 @@ const fmt = (dt) => {
   return `${yy}-${mm}-${dd}`
 }
 
-export function buildDateRange(tipo, fecha) {
+export function buildDateRange(tipo, fecha, cuatrimestre) {
   const { y, m, d } = parseDate(fecha)
 
   switch (tipo) {
@@ -35,9 +35,10 @@ export function buildDateRange(tipo, fecha) {
       }
     }
     case 'cuatrimestre': {
-      const cuatri = Math.floor((m - 1) / 4) + 1
-      const mesInicio = (cuatri - 1) * 4 + 1
-      const mesFin = mesInicio + 3
+      // Enero no es mes hábil: 1º cuatrimestre Mar-Jul, 2º Ago-Nov.
+      const indice = Number(cuatrimestre) === 2 ? 2 : 1
+      const mesInicio = indice === 2 ? 8 : 3
+      const mesFin = indice === 2 ? 11 : 7
       return {
         desde: `${y}-${String(mesInicio).padStart(2, '0')}-01`,
         hasta: `${y}-${String(mesFin).padStart(2, '0')}-30`,
@@ -49,8 +50,8 @@ export function buildDateRange(tipo, fecha) {
 }
 
 export const reporteService = {
-  generar({ cursoId, tipo, fecha }) {
-    const { desde, hasta } = buildDateRange(tipo, fecha)
+  generar({ cursoId, tipo, fecha, cuatrimestre }) {
+    const { desde, hasta } = buildDateRange(tipo, fecha, cuatrimestre)
 
     const detalle = db.prepare(
       `SELECT al.alumno_id, al.nombre, al.apellido, a.fecha, a.estado
@@ -81,83 +82,60 @@ export const reporteService = {
        ORDER BY a.fecha`
     ).all(cursoId, desde, hasta).map(r => r.fecha)
 
-    return { desde, hasta, dias, resumen, detalle }
+    return {
+      desde,
+      hasta,
+      dias,
+      resumen,
+      detalle,
+      ...(tipo === 'cuatrimestre' ? { cuatrimestre: Number(cuatrimestre) === 2 ? 2 : 1 } : {}),
+    }
   },
 
-  faltasPorMateria({ cursoId, desde, hasta }) {
+  matrizPorMateria({ cursoId }) {
     const materias = db.prepare(
       `SELECT materia_id, nombre_materia FROM materias WHERE curso_id = ? ORDER BY nombre_materia`
     ).all(cursoId)
-
-    const horarios = db.prepare(
-      `SELECT h.materia_id, h.dia_semana
-       FROM horarios h
-       WHERE h.materia_id IN (SELECT materia_id FROM materias WHERE curso_id = ?)`
-    ).all(cursoId)
-    const diasMap = {}
-    for (const h of horarios) {
-      (diasMap[h.materia_id] ||= new Set()).add(h.dia_semana)
-    }
-
-    const ausentes = db.prepare(
-      `SELECT a.alumno_id, a.materia_id, a.fecha
-       FROM asistencias a
-       JOIN alumnos al ON al.alumno_id = a.alumno_id
-       WHERE al.curso_id = ? AND a.estado = 'Ausente' AND a.fecha BETWEEN ? AND ?`
-    ).all(cursoId, desde, hasta)
 
     const alumnos = db.prepare(
       'SELECT alumno_id, nombre, apellido FROM alumnos WHERE curso_id = ? ORDER BY apellido, nombre'
     ).all(cursoId)
 
-    const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+    const registros = db.prepare(
+      `SELECT a.alumno_id, a.materia_id,
+              COUNT(*) as total,
+              SUM(CASE WHEN a.estado IN ('Presente', 'Tarde') THEN 1 ELSE 0 END) as presentes
+       FROM asistencias a
+       JOIN alumnos al ON al.alumno_id = a.alumno_id
+       WHERE al.curso_id = ?
+       GROUP BY a.alumno_id, a.materia_id`
+    ).all(cursoId)
 
-    const conteo = new Map()
-    for (const a of ausentes) {
-      const wd = diasSemana[new Date(a.fecha).getDay()]
-      if (diasMap[a.materia_id]?.has(wd)) {
-        const k = `${a.alumno_id}:${a.materia_id}`
-        conteo.set(k, (conteo.get(k) || 0) + 1)
-      }
+    const celdas = new Map()
+    for (const r of registros) {
+      celdas.set(`${r.alumno_id}:${r.materia_id}`, r)
     }
 
-    const sesiones = (materiaId) => {
-      if (!diasMap[materiaId]) return 0
-      return this._contarDias(desde, hasta, diasMap[materiaId])
-    }
-
-    const filas = []
-    for (const alumno of alumnos) {
+    const filas = alumnos.map((alumno) => {
+      const celdasAlumno = {}
       for (const m of materias) {
-        const aus = conteo.get(`${alumno.alumno_id}:${m.materia_id}`) || 0
-        const s = sesiones(m.materia_id)
-        filas.push({
-          alumno_id: alumno.alumno_id,
-          nombre: alumno.nombre,
-          apellido: alumno.apellido,
-          materia_id: m.materia_id,
-          materia_nombre: m.nombre_materia,
-          ausencias: aus,
-          sesiones: s,
-          porcentaje: s > 0 ? Math.round((aus / s) * 1000) / 10 : 0,
-        })
+        const r = celdas.get(`${alumno.alumno_id}:${m.materia_id}`)
+        if (r) {
+          celdasAlumno[m.materia_id] = {
+            presentes: r.presentes,
+            total: r.total,
+            porcentaje: r.total > 0 ? Math.round((r.presentes / r.total) * 100) : null,
+          }
+        }
       }
-    }
-    return filas
-  },
+      return {
+        alumno_id: alumno.alumno_id,
+        nombre: alumno.nombre,
+        apellido: alumno.apellido,
+        celdas: celdasAlumno,
+      }
+    })
 
-  _contarDias(desde, hasta, dias) {
-    const [y1, m1, d1] = desde.split('-').map(Number)
-    const start = new Date(y1, m1 - 1, d1)
-    const [y2, m2, d2] = hasta.split('-').map(Number)
-    const end = new Date(y2, m2 - 1, d2)
-    let count = 0
-    const cur = new Date(start)
-    const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
-    while (cur <= end) {
-      if (dias.has(diasSemana[cur.getDay()])) count++
-      cur.setDate(cur.getDate() + 1)
-    }
-    return count
+    return { materias, alumnos: filas }
   },
 }

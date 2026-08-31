@@ -3,19 +3,17 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
   IconLogo,
-  IconPanel,
   IconAsistencia,
   IconAlumnos,
   IconMaterias,
   IconReportes,
-  IconPrevias,
-  IconRetiro,
-  IconDocentes,
+  IconEscanear,
+  IconGenerar,
   IconChevron,
+  IconLogout,
 } from '../icons'
 
 const NAV = [
-  { to: '/dashboard', label: 'Panel', Icon: IconPanel },
   {
     key: 'asistencias',
     label: 'Asistencias',
@@ -29,18 +27,7 @@ const NAV = [
     key: 'alumnos',
     label: 'Alumnos',
     Icon: IconAlumnos,
-    children: [
-      { to: '/alumnos', label: 'Ver alumnos', Icon: IconAlumnos },
-    ],
-  },
-  {
-    key: 'retiro',
-    label: 'Retiro',
-    Icon: IconRetiro,
-    children: [
-      { to: '/retiro/retirar', label: 'Retirar Alumno', Icon: IconRetiro },
-      { to: '/retiro/tutores', label: 'Ver Tutores', Icon: IconAlumnos },
-    ],
+    children: [{ to: '/alumnos', label: 'Ver alumnos', Icon: IconAlumnos }],
   },
   {
     key: 'materias',
@@ -49,18 +36,15 @@ const NAV = [
     children: [
       { to: '/cursos', label: 'Materias y Horarios', Icon: IconMaterias },
       { to: '/cursos/comisiones', label: 'Comisiones', Icon: IconAlumnos },
-      { to: '/previas', label: 'Previas', Icon: IconPrevias },
     ],
   },
   {
-    key: 'docentes',
-    label: 'Docentes',
-    Icon: IconDocentes,
+    key: 'qr',
+    label: 'QR',
+    Icon: IconGenerar,
     children: [
-      { to: '/docentes', label: 'Lista', Icon: IconDocentes },
-      { to: '/docentes/asignacion', label: 'Asignación', Icon: IconMaterias },
-      { to: '/docentes/disponibilidad', label: 'Disponibilidad / Licencias', Icon: IconAsistencia },
-      { to: '/docentes/ausencias', label: 'Ausencias', Icon: IconAsistencia },
+      { to: '/qr/generar', label: 'Generar QR', Icon: IconGenerar },
+      { to: '/qr/escanear', label: 'Escanear QR', Icon: IconEscanear },
     ],
   },
 ]
@@ -69,7 +53,7 @@ const grupoDe = pathname =>
   NAV.find(item => item.children?.some(c => c.to === pathname || pathname.startsWith(c.to + '/')))?.key
 
 export default function Sidebar() {
-  const { usuario } = useAuth()
+  const { usuario, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [expandedKey, setExpandedKey] = useState(() => grupoDe(location.pathname))
@@ -78,17 +62,20 @@ export default function Sidebar() {
     setExpandedKey(prev => prev === key ? null : key)
   }
 
-  const closeMenu = () => {}
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
 
   return (
     <>
       <header className="mobile-topbar">
         <h2>Asistencias</h2>
-        <span className="user-info">{usuario?.nombre} {usuario?.apellido}</span>
+        <span className="user-info">{usuario?.nombre} {usuario?.apellido}{usuario?.turno ? ` · ${usuario.turno}` : ''}</span>
       </header>
       <nav className="sidebar">
         <div className="sidebar-header">
-          <button className="brand" onClick={() => navigate('/dashboard')} aria-label="Ir al panel">
+          <button className="brand" onClick={() => navigate('/asistencia')} aria-label="Ir a tomar asistencia">
             <IconLogo size={22} />
           </button>
         </div>
@@ -112,7 +99,6 @@ export default function Sidebar() {
                         key={to}
                         to={to}
                         end
-                        onClick={closeMenu}
                         className={({ isActive }) => (isActive ? 'active' : '')}
                       >
                         <Icon size={15} />
@@ -127,7 +113,6 @@ export default function Sidebar() {
                 key={item.to}
                 to={item.to}
                 end
-                onClick={closeMenu}
                 className={({ isActive }) => (isActive ? 'active' : '')}
               >
                 <item.Icon />
@@ -135,6 +120,10 @@ export default function Sidebar() {
               </NavLink>
             )
           )}
+          <button className="sidebar-logout" onClick={handleLogout}>
+            <IconLogout size={15} />
+            Cerrar sesión
+          </button>
         </div>
       </nav>
     </>

@@ -5,6 +5,7 @@ vi.mock('../../src/services/alumnoService.js', () => ({
   alumnoService: {
     list: vi.fn(),
     getById: vi.fn(),
+    perfil: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     remove: vi.fn(),
@@ -16,7 +17,6 @@ vi.mock('../../src/middlewares/auth.js', () => ({
     req.usuario = { id: 1, rol: 'preceptor' }
     next()
   }),
-  authenticateAlumno: vi.fn((_req, _res, next) => next()),
 }))
 
 import createApp from '../../src/app.js'
@@ -27,7 +27,7 @@ const app = createApp()
 const AUTH = { Authorization: 'Bearer x' }
 
 beforeEach(() => {
-  for (const fn of ['list', 'getById', 'create', 'update', 'remove']) {
+  for (const fn of ['list', 'getById', 'perfil', 'create', 'update', 'remove']) {
     alumnoService[fn].mockReset()
   }
 })
@@ -39,6 +39,25 @@ describe('GET /api/alumnos', () => {
     expect(res.status).toBe(200)
     expect(alumnoService.list).toHaveBeenCalledWith({ cursoId: '1', comision: undefined, q: 'juan' })
     expect(res.body).toHaveLength(1)
+  })
+})
+
+describe('GET /api/alumnos/perfil/:id', () => {
+  it('devuelve 200 con el perfil', async () => {
+    alumnoService.perfil.mockReturnValue({ alumno_id: 7, dni: '40213456', ultimas: [], totales: {} })
+    const res = await request(app).get('/api/alumnos/perfil/7').set(AUTH)
+    expect(res.status).toBe(200)
+    expect(alumnoService.perfil).toHaveBeenCalledWith('7')
+    expect(res.body.dni).toBe('40213456')
+  })
+
+  it('devuelve 404 si no existe (HttpError)', async () => {
+    alumnoService.perfil.mockImplementation(() => {
+      throw new HttpError(404, 'Alumno no encontrado')
+    })
+    const res = await request(app).get('/api/alumnos/perfil/99').set(AUTH)
+    expect(res.status).toBe(404)
+    expect(res.body).toEqual({ error: 'Alumno no encontrado' })
   })
 })
 

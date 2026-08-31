@@ -1,31 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { DDL, seedCurso, seedMateria } from '../helpers/inMemoryDb.js'
+import { setupTestDb, resetDb, seedCurso } from '../helpers/inMemoryDb.js'
 
-vi.mock('../../src/db/index.js', async () => {
-  const Database = (await import('better-sqlite3')).default
-  const db = new Database(':memory:')
-  db.pragma('foreign_keys = ON')
-  db.exec(DDL)
-  return { default: db }
-})
-
-const mockedDb = (await import('../../src/db/index.js')).default
+const mockedDb = setupTestDb()
 
 import { materiaService } from '../../src/services/materiaService.js'
 import { HttpError } from '../../src/utils/http-error.js'
 
-const RESET = [
-  'materia_comisiones', 'previas', 'asistencias', 'docente_suplencias', 'horarios', 'materias',
-  'alumnos_tutores', 'alumnos', 'preceptores_cursos', 'preceptores',
-  'docente_materias', 'docentes', 'cursos', 'tutores',
-]
-
 let cursoId
 
 beforeEach(() => {
-  for (const t of RESET) {
-    try { mockedDb.prepare(`DELETE FROM ${t}`).run() } catch {}
-  }
+  resetDb(mockedDb)
   cursoId = seedCurso(mockedDb, { anio: 4, division: '1', especialidad: 'Informática' })
 })
 
@@ -81,31 +65,6 @@ describe('materiaService', () => {
       expect(found.horarios).toHaveLength(1)
       expect(found.horarios[0].dia_semana).toBe('Lunes')
     })
-
-    it('incluye el docente y el reemplazo de la materia', () => {
-      const t = mockedDb.prepare(
-        `INSERT INTO docentes (nombre, apellido, dni_hash, dni_cif, correo, telefono, estado)
-         VALUES ('Ana', 'García', 'h', 'c', 'a@b', '1234', 'Licencia')`
-      ).run().lastInsertRowid
-      const r = mockedDb.prepare(
-        `INSERT INTO docentes (nombre, apellido, dni_hash, dni_cif, correo, telefono, estado)
-         VALUES ('Luis', 'Rodríguez', 'h2', 'c2', 'l@b', '4321', 'Disponible')`
-      ).run().lastInsertRowid
-      mockedDb.prepare('INSERT INTO docente_materias (docente_id, nombre_materia) VALUES (?, ?)').run(t, 'Matemática')
-      mockedDb.prepare('INSERT INTO docente_materias (docente_id, nombre_materia) VALUES (?, ?)').run(r, 'Matemática')
-
-      const m = materiaService.create({ cursoId, nombreMateria: 'Matemática', especialidad: 'Informática', docenteId: t })
-      mockedDb.prepare('INSERT INTO docente_suplencias (materia_id, suplente_docente_id) VALUES (?, ?)')
-        .run(m.materia_id, r)
-
-      const found = materiaService.listAll().find(x => x.materia_id === m.materia_id)
-      expect(found.docente_nombre).toBe('Ana')
-      expect(found.docente_apellido).toBe('García')
-      expect(found.docente_estado).toBe('Licencia')
-      expect(found.reemplazo_id).toBe(r)
-      expect(found.reemplazo_nombre).toBe('Luis')
-      expect(found.reemplazo_apellido).toBe('Rodríguez')
-    })
   })
 
   describe('setHorarios', () => {
@@ -124,6 +83,22 @@ describe('materiaService', () => {
       expect(() => materiaService.setHorarios(m.materia_id, [
         { dia_semana: 'Domingo', hora_entrada: '08:00', hora_salida: '09:00' },
       ])).toThrow(/Día inválido/)
+    })
+
+    it('asocia un horario con comisión', () => {
+      const m = materiaService.create({ cursoId, nombreMateria: 'Programación', especialidad: 'Info', tipo: 'Taller' })
+      materiaService.setHorarios(m.materia_id, [
+        { dia_semana: 'Lunes', hora_entrada: '08:00', hora_salida: '09:00', comision: 'A' },
+      ])
+      const result = materiaService.getById(m.materia_id)
+      expect(result.horarios[0].comision).toBe('A')
+    })
+
+    it('lanza 400 con comisión inválida', () => {
+      const m = materiaService.create({ cursoId, nombreMateria: 'Programación', especialidad: 'Info', tipo: 'Taller' })
+      expect(() => materiaService.setHorarios(m.materia_id, [
+        { dia_semana: 'Lunes', hora_entrada: '08:00', hora_salida: '09:00', comision: 'C' },
+      ])).toThrow(/Comisión inválida/)
     })
   })
 
@@ -152,103 +127,29 @@ describe('materiaService', () => {
     })
   })
 
-  describe('asignación por competencia', () => {
-    const habilitar = (docenteId, nombre) =>
-      mockedDb.prepare(
-        'INSERT INTO docente_materias (docente_id, nombre_materia) VALUES (?, ?)'
-      ).run(docenteId, nombre)
-
-    it('devuelve docentes_disponibles según la competencia', () => {
-      const dId = mockedDb.prepare(
-        "INSERT INTO docentes (nombre, apellido, dni_hash, dni_cif, telefono) VALUES ('Ana', 'García', 'h', 'e', '1234')"
-      ).run().lastInsertRowid
-      habilitar(dId, 'Matemática')
-      const m = materiaService.create({ cursoId, nombreMateria: 'Matemática', especialidad: 'Informática' })
-      const otro = materiaService.getById(m.materia_id)
-      expect(otro.docentes_disponibles).toHaveLength(1)
-      expect(otro.docentes_disponibles[0]).toMatchObject({ docente_id: dId, apellido: 'García' })
-    })
-
-    it('rechaza asignar un docente sin competencia', () => {
-      const m = materiaService.create({ cursoId, nombreMateria: 'Química', especialidad: 'Informática' })
-      const dId = mockedDb.prepare(
-        "INSERT INTO docentes (nombre, apellido, dni_hash, dni_cif, telefono) VALUES ('Ana', 'García', 'h1', 'e1', '1234')"
-      ).run().lastInsertRowid
-      expect(() => materiaService.update(m.materia_id, { docenteId: dId }))
-        .toThrow(new HttpError(400, 'El docente no puede dictar esta materia'))
-    })
-
-    it('acepta asignar un docente con competencia', () => {
-      const m = materiaService.create({ cursoId, nombreMateria: 'Química', especialidad: 'Informática' })
-      const dId = mockedDb.prepare(
-        "INSERT INTO docentes (nombre, apellido, dni_hash, dni_cif, telefono) VALUES ('Ana', 'García', 'h2', 'e2', '1234')"
-      ).run().lastInsertRowid
-      habilitar(dId, 'Química')
-      const updated = materiaService.update(m.materia_id, { docenteId: dId })
-      expect(updated.docente_id).toBe(dId)
-    })
-
-    it('permite quitar el docente con null', () => {
-      const m = materiaService.create({ cursoId, nombreMateria: 'Química', especialidad: 'Informática' })
-      const dId = mockedDb.prepare(
-        "INSERT INTO docentes (nombre, apellido, dni_hash, dni_cif, telefono) VALUES ('Ana', 'García', 'h3', 'e3', '1234')"
-      ).run().lastInsertRowid
-      habilitar(dId, 'Química')
-      materiaService.update(m.materia_id, { docenteId: dId })
-      const sinDocente = materiaService.update(m.materia_id, { docenteId: null })
-      expect(sinDocente.docente_id).toBeNull()
-    })
-  })
-
   describe('setComisiones', () => {
-    const habilitar = (docenteId, nombre) =>
-      mockedDb.prepare(
-        'INSERT INTO docente_materias (docente_id, nombre_materia) VALUES (?, ?)'
-      ).run(docenteId, nombre)
-    const crearDocente = (nombre) => mockedDb.prepare(
-      "INSERT INTO docentes (nombre, apellido, dni_hash, dni_cif, telefono) VALUES (?, 'X', ?, ?, '1234')"
-    ).run(nombre, `h_${nombre}`, `e_${nombre}`).lastInsertRowid
-
     it('rechaza comisiones para materias de Teoría', () => {
       const m = materiaService.create({ cursoId, nombreMateria: 'Matemática', especialidad: 'Info' })
       expect(() => materiaService.setComisiones(m.materia_id, [{ comision: 'A' }]))
-        .toThrow(new HttpError(400, 'Solo las materias de Taller o Laboratorio admiten docentes por comisión'))
+        .toThrow(new HttpError(400, 'Solo las materias de Taller o Laboratorio admiten comisiones'))
     })
 
-    it('asigna docentes por comisión en una materia de Taller', () => {
+    it('asigna comisiones A/B en una materia de Taller', () => {
       const m = materiaService.create({ cursoId, nombreMateria: 'Programación', especialidad: 'Info', tipo: 'Taller' })
-      const a = crearDocente('Ana'); habilitar(a, 'Programación')
-      const b = crearDocente('Luis'); habilitar(b, 'Programación')
       const result = materiaService.setComisiones(m.materia_id, [
-        { comision: 'A', docente_id: a },
-        { comision: 'B', docente_id: b },
+        { comision: 'A' },
+        { comision: 'B' },
       ])
       expect(result.comisiones).toHaveLength(2)
       expect(result.comisiones.map(c => c.comision)).toEqual(['A', 'B'])
-      expect(result.comisiones[0]).toMatchObject({ docente_id: a, docente_nombre: 'Ana' })
-      expect(result.comisiones[1]).toMatchObject({ docente_id: b, docente_nombre: 'Luis' })
-    })
-
-    it('validar que el docente tenga competencia', () => {
-      const m = materiaService.create({ cursoId, nombreMateria: 'Programación', especialidad: 'Info', tipo: 'Laboratorio' })
-      const a = crearDocente('Ana')
-      expect(() => materiaService.setComisiones(m.materia_id, [{ comision: 'A', docente_id: a }]))
-        .toThrow(new HttpError(400, 'El docente no puede dictar esta materia'))
     })
 
     it('rechaza comisiones duplicadas', () => {
       const m = materiaService.create({ cursoId, nombreMateria: 'Programación', especialidad: 'Info', tipo: 'Taller' })
-      const a = crearDocente('Ana'); habilitar(a, 'Programación')
       expect(() => materiaService.setComisiones(m.materia_id, [
-        { comision: 'A', docente_id: a },
-        { comision: 'A', docente_id: a },
+        { comision: 'A' },
+        { comision: 'A' },
       ])).toThrow(/Comisión duplicada/)
-    })
-
-    it('permite comisión sin docente', () => {
-      const m = materiaService.create({ cursoId, nombreMateria: 'Programación', especialidad: 'Info', tipo: 'Taller' })
-      const result = materiaService.setComisiones(m.materia_id, [{ comision: 'A' }])
-      expect(result.comisiones[0]).toMatchObject({ comision: 'A', docente_id: null })
     })
 
     it('rechaza comisiones con nombre distinto de A/B', () => {

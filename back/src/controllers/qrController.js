@@ -53,8 +53,4 @@ export const qrController = {
     if (!curso_id) throw new HttpError(400, 'curso_id requerido')
     res.json({ tokens: qrService.tokensPorCurso(curso_id) })
   },
-
-  alumno(req, res) {
-    res.json(qrService.alumno(req.alumno.alumno_id))
-  },
 }
