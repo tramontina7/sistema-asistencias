@@ -37,7 +37,8 @@ export function runSchema() {
         telefono      TEXT NOT NULL,
         username      TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
-        turno         TEXT CHECK(turno IS NULL OR turno IN ('Mañana', 'Tarde', 'Noche'))
+        turno         TEXT CHECK(turno IS NULL OR turno IN ('Mañana', 'Tarde', 'Noche')),
+        activo        INTEGER NOT NULL DEFAULT 1
       );
 
       CREATE TABLE IF NOT EXISTS cursos (
@@ -148,6 +149,15 @@ export function runSchema() {
         db.exec('ALTER TABLE alumnos ADD COLUMN qr_token_hash TEXT NULL')
       }
       db.pragma('user_version = 8')
+    }
+
+    // Migración v9: campo activo en preceptores (permitir desactivación sin borrado).
+    if (db.pragma('user_version', { simple: true }) < 9) {
+      const cols = db.prepare('PRAGMA table_info(preceptores)').all().map(c => c.name)
+      if (!cols.includes('activo')) {
+        db.exec('ALTER TABLE preceptores ADD COLUMN activo INTEGER NOT NULL DEFAULT 1')
+      }
+      db.pragma('user_version = 9')
     }
   })
 

@@ -284,7 +284,7 @@ export default function Asistencia() {
       {loading && <p className="loading">Cargando...</p>}
 
       {!loading && turno && cursosDisponibles.length === 0 && (
-        <p className="notice">Hoy no hay cursos con clases en el turno {turno}. Sin turno asignado se verían todos los cursos.</p>
+        <p className="notice">Hoy no hay cursos con clases en el turno {turno}. </p>
       )}
 
       {!loading && cursoId && !turno && materiasDelDia.length === 0 && (

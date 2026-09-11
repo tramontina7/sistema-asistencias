@@ -28,7 +28,8 @@ const { testDb } = vi.hoisted(() => {
       telefono      TEXT NOT NULL,
       username      TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
-      turno         TEXT CHECK(turno IS NULL OR turno IN ('Mañana', 'Tarde', 'Noche'))
+      turno         TEXT CHECK(turno IS NULL OR turno IN ('Mañana', 'Tarde', 'Noche')),
+      activo        INTEGER NOT NULL DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS alumnos (
@@ -144,10 +145,10 @@ export function seedAsistencia(db, { alumnoId, materiaId, fecha, estado = 'Prese
   ).run(alumnoId, materiaId, fecha, estado, motivo, horaIngreso, motivoTarde).lastInsertRowid
 }
 
-export function seedPreceptor(db, { nombre = 'Carlos', apellido = 'García', username = 'test', password = 'test123' } = {}) {
+export function seedPreceptor(db, { nombre = 'Carlos', apellido = 'García', username = 'test', password = 'test123', turno = null, activo = 1 } = {}) {
   const bcrypt = { hashSync: (s) => `hash_${s}` }
   return db.prepare(
-    `INSERT INTO preceptores (nombre, apellido, dni_hash, dni_cif, telefono, username, password_hash)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(nombre, apellido, `hash_${username}`, `enc_${username}`, '1234-5678', username, bcrypt.hashSync(password)).lastInsertRowid
+    `INSERT INTO preceptores (nombre, apellido, dni_hash, dni_cif, telefono, username, password_hash, turno, activo)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(nombre, apellido, `hash_${username}`, `enc_${username}`, '1234-5678', username, bcrypt.hashSync(password), turno, activo).lastInsertRowid
 }

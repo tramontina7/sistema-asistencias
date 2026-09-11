@@ -60,6 +60,15 @@ describe('authService', () => {
       const result = authService.login({ username: 'preceptor-tarde', password: 'preceptor123' })
       expect(result.usuario).toMatchObject({ turno: 'Tarde' })
     })
+
+    it('rechaza el login de un preceptor desactivado', () => {
+      mockedDb.prepare(
+        `INSERT INTO preceptores (nombre, apellido, dni_hash, dni_cif, telefono, username, password_hash, turno, activo)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run('In', 'Activo', 'h4', 'e4', '1234-5678', 'inactivo', hash, 'Mañana', 0)
+      expect(() => authService.login({ username: 'inactivo', password: 'preceptor123' }))
+        .toThrow(new HttpError(401, 'Cuenta desactivada'))
+    })
   })
 
   describe('me', () => {

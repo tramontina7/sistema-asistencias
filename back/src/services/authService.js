@@ -7,12 +7,15 @@ import { HttpError } from '../utils/http-error.js'
 export const authService = {
   login({ username, password }) {
     const user = db.prepare(
-      `SELECT preceptor_id, username, password_hash, nombre, apellido, turno
+      `SELECT preceptor_id, username, password_hash, nombre, apellido, turno, activo
        FROM preceptores WHERE username = ?`
     ).get(username)
 
     if (!user || !bcrypt.compareSync(password, user.password_hash)) {
       throw new HttpError(401, 'Credenciales inválidas')
+    }
+    if (user.activo === 0) {
+      throw new HttpError(401, 'Cuenta desactivada')
     }
 
     const payload = {
