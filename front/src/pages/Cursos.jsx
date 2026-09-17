@@ -150,10 +150,10 @@ export default function Cursos() {
                   </select>
                   <input type="time" value={h.hora_entrada} onChange={e => actualizarHorario(idx, 'hora_entrada', e.target.value)} />
                   <input type="time" value={h.hora_salida} onChange={e => actualizarHorario(idx, 'hora_salida', e.target.value)} />
-                  <button className="btn-small btn-danger" onClick={() => eliminarHorario(idx)}>✕</button>
+                  <button className="btn-danger-red" onClick={() => eliminarHorario(idx)}>✕</button>
                 </div>
               ))}
-              <button className="btn-small" onClick={agregarHorario}>+ Agregar día</button>
+              <button className="btn-agregar" onClick={agregarHorario}>+ Agregar día</button>
             </div>
             <div className="modal-actions">
               <button className="btn-primary" onClick={guardarHorario}>Guardar</button>

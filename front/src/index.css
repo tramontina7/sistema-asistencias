@@ -459,7 +459,9 @@ body {
 .btn-secondary:hover { background: var(--bg); }
 .btn-success { background: var(--success); color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; }
 .btn-danger { background: var(--danger); color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+.btn-danger-red { background: var(--danger); color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px;font-weight: 900; cursor: pointer; }
 .btn-small { background: var(--bg); border: 1px solid var(--border); padding: 4px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+.btn-agregar { background: var(--bg); border: 1px solid var(--border); padding: 7px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
 .btn-elim { background: var(--danger); border: 1px solid var(--border); padding: 4px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
 .btn-small:hover { background: #e2e8f0; }
 .btn-large { padding: 14px 32px; font-size: 16px; width: auto; }
