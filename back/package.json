@@ -15,11 +15,7 @@
     "preceptor:editar": "node src/cli/preceptores.js editar",
     "preceptor:desactivar": "node src/cli/preceptores.js desactivar",
     "preceptor:reactivar": "node src/cli/preceptores.js reactivar",
-    "preceptor:eliminar": "node src/cli/preceptores.js eliminar",
-    "alumnos:dev": "node src/alumnosDevSeeds.js",
-    "alumnos:dev:clean": "node src/alumnosDevClean.js",
-    "horarios:dev": "node src/horariosDevSeeds.js",
-    "horarios:dev:clean": "node src/horariosDevClean.js"
+    "preceptor:eliminar": "node src/cli/preceptores.js eliminar"
   },
   "keywords": [],
   "author": "",
