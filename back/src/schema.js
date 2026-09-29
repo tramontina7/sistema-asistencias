@@ -164,8 +164,28 @@ export function runSchema() {
 
     // Migración v10: dni_hash en alumnos debe ser bcrypt (unidireccional), no AES reversible.
     // Backfill: recalcula dni_hash = bcrypt(dni) para todos los alumnos existentes.
+    //
+    // Antes de migrar se detectan DNIs duplicados reales: el dni_hash antiguo era cifrado
+    // con IV aleatorio, así que la restricción UNIQUE no detectaba DNIs repetidos y la
+    // migración fallaría con un SQLITE_CONSTRAINT críptico, dejando el server sin arrancar.
     if (db.pragma('user_version', { simple: true }) < 10) {
       const alumnos = db.prepare('SELECT alumno_id, dni_cif FROM alumnos').all()
+
+      const porDni = new Map()
+      for (const a of alumnos) {
+        const dni = decrypt(a.dni_cif)
+        if (!porDni.has(dni)) porDni.set(dni, [])
+        porDni.get(dni).push(a.alumno_id)
+      }
+      const duplicados = [...porDni.entries()].filter(([, ids]) => ids.length > 1)
+      if (duplicados.length > 0) {
+        const detalle = duplicados.map(([dni, ids]) => `DNI ${dni}: alumnos ${ids.join(', ')}`)
+        throw new Error(
+          `[schema] Migración v10 abortada: hay ${duplicados.length} DNI(s) duplicado(s) en alumnos. ` +
+          `Resolvé los duplicados antes de arrancar (dni_hash es UNIQUE).\n  ${detalle.join('\n  ')}`
+        )
+      }
+
       for (const a of alumnos) {
         const dni = decrypt(a.dni_cif)
         const dniHash = bcrypt.hashSync(dni, 10)
