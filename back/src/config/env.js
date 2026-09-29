@@ -14,6 +14,13 @@ export const env = {
   jwtSecret: required('JWT_SECRET'),
   encryptionKey: required('ENCRYPTION_KEY'),
   qrSecret: process.env.QR_SECRET || `${process.env.JWT_SECRET}_qr`,
+  // Claims iss/aud: blindan contra el reuso de un token entre entornos que
+  // compartan el mismo JWT_SECRET. El issuer incluye NODE_ENV por defecto para
+  // que dev y prod ya queden diferenciados sin configuracion extra; setealo
+  // explicitamente cuando tengas varios entornos con el mismo NODE_ENV
+  // (p.ej. dos staging) y quieras distinguirlos.
+  jwtIssuer: process.env.JWT_ISSUER || `sistema-asistencias:${process.env.NODE_ENV || 'sin-env'}`,
+  jwtAudience: process.env.JWT_AUDIENCE || 'sistema-asistencias-api',
 }
 
 // Fail-fast en producción: rechaza secretos débiles o por defecto de desarrollo.

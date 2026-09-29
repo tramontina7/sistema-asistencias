@@ -33,16 +33,21 @@ export function createApp() {
     allowedOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173']
   }
 
-  // Seguridad y parsing
-  app.use(helmet())
-  app.use(cors({
+  // CORS solo habilita la preflight de CORS; las rutas /api siguen requiriendo JWT.
+  // En produccion no envjamos credenciales en respuestas cross-origin.
+  const corsOptions = {
     origin(origin, callback) {
       // Requests sin header Origin (same-origin, curl, tests) se permiten.
       if (!origin) return callback(null, true)
       if (allowedOrigins.includes(origin)) return callback(null, true)
       return callback(new HttpError(403, 'CORS: origen no permitido'))
     },
-  }))
+    credentials: !isProd,
+  }
+
+  // Seguridad y parsing
+  app.use(helmet())
+  app.use(cors(corsOptions))
   app.use(express.json({ limit: '10mb' }))
 
   // Límite global de solicitudes a la API
