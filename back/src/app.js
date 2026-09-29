@@ -18,10 +18,20 @@ export function createApp() {
   app.set('trust proxy', 1)
 
   // Lista blanca de orígenes para CORS (separados por coma en ALLOWED_ORIGINS).
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  // En producción, ALLOWED_ORIGINS es obligatorio; en desarrollo se permite localhost por defecto.
+  const isProd = process.env.NODE_ENV === 'production'
+  let allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
     .split(',')
     .map(s => s.trim())
     .filter(Boolean)
+
+  if (isProd && allowedOrigins.length === 0) {
+    throw new Error('[config] ALLOWED_ORIGINS debe configurarse en producción')
+  }
+
+  if (!isProd && allowedOrigins.length === 0) {
+    allowedOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173']
+  }
 
   // Seguridad y parsing
   app.use(helmet())
@@ -51,6 +61,16 @@ export function createApp() {
     rateLimit({
       windowMs: 60 * 1000,
       max: 5,
+      message: { error: 'Demasiados intentos de login, espere un minuto' },
+    })
+  )
+
+  // Rate limit para login de alumnos (DNI)
+  app.use(
+    '/api/auth/alumno/login',
+    rateLimit({
+      windowMs: 60 * 1000,
+      max: 10,
       message: { error: 'Demasiados intentos de login, espere un minuto' },
     })
   )

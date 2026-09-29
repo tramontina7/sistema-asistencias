@@ -46,12 +46,12 @@ export const authService = {
   loginAlumno({ nombre, apellido, dni }) {
     const dniText = String(dni)
     const candidatos = db.prepare(
-      `SELECT alumno_id, nombre, apellido, curso_id, dni_cif
+      `SELECT alumno_id, nombre, apellido, curso_id, dni_hash
        FROM alumnos
        WHERE LOWER(nombre) = LOWER(?) AND LOWER(apellido) = LOWER(?)`
     ).all(nombre, apellido)
 
-    const alumno = candidatos.find(a => decrypt(a.dni_cif) === dniText)
+    const alumno = candidatos.find(a => bcrypt.compareSync(dniText, a.dni_hash))
 
     if (!alumno) {
       throw new HttpError(401, 'Datos incorrectos. Verificá tu nombre, apellido y DNI.')

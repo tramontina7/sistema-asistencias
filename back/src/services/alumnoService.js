@@ -1,4 +1,5 @@
 import db from '../db/index.js'
+import bcrypt from 'bcryptjs'
 import { encrypt, decrypt } from '../utils/crypto.js'
 import { HttpError } from '../utils/http-error.js'
 import { formatNombre } from './cursoService.js'
@@ -86,8 +87,11 @@ export const alumnoService = {
     }
 
     const dniText = dni.toString()
-    const duplicate = db.prepare('SELECT dni_cif FROM alumnos').all()
-      .some(r => decrypt(r.dni_cif) === dniText)
+    const dniHash = bcrypt.hashSync(dniText, 10)
+    
+    // Verificar duplicado comparando con bcrypt (hash determinista no es posible con salt aleatorio)
+    const existentes = db.prepare('SELECT dni_hash FROM alumnos').all()
+    const duplicate = existentes.some(r => bcrypt.compareSync(dniText, r.dni_hash))
     if (duplicate) throw new HttpError(409, 'Ya existe un alumno con ese DNI')
 
     const curso = db.prepare('SELECT curso_id FROM cursos WHERE curso_id = ?').get(cursoId)
@@ -96,7 +100,7 @@ export const alumnoService = {
     const result = db.prepare(
       `INSERT INTO alumnos (nombre, apellido, dni_hash, dni_cif, curso_id, comision)
        VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(nombre, apellido, encrypt(dniText), encrypt(dniText), cursoId, comision)
+    ).run(nombre, apellido, dniHash, encrypt(dniText), cursoId, comision)
 
     return {
       alumno_id: result.lastInsertRowid,
@@ -120,8 +124,9 @@ export const alumnoService = {
     if (apellido !== undefined) { updates.push('apellido = ?'); params.push(apellido) }
     if (dni !== undefined) {
       const dniText = dni.toString()
+      const dniHash = bcrypt.hashSync(dniText, 10)
       updates.push('dni_hash = ?', 'dni_cif = ?')
-      params.push(encrypt(dniText), encrypt(dniText))
+      params.push(dniHash, encrypt(dniText))
     }
     if (cursoId !== undefined) { updates.push('curso_id = ?'); params.push(cursoId) }
     if (comision !== undefined) { updates.push('comision = ?'); params.push(comision) }
