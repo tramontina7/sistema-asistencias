@@ -1,4 +1,5 @@
 import db from './db/index.js'
+import bcrypt from 'bcryptjs'
 import { encrypt } from './utils/crypto.js'
 import { asegurarPreceptores } from './services/preceptorService.js'
 
@@ -253,7 +254,8 @@ export async function runSeed() {
     ]
 
     for (const [n, a, dni, cid, com] of alumnos) {
-      insertAlumno.run(n, a, encrypt(dni), encrypt(dni), cid, com)
+      const dniHash = bcrypt.hashSync(dni, 10)
+      insertAlumno.run(n, a, dniHash, encrypt(dni), cid, com)
     }
   })
 

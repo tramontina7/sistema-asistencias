@@ -11,10 +11,11 @@ import { HttpError } from '../../src/utils/http-error.js'
 const hash = bcrypt.hashSync('preceptor123', 4)
 
 function seedAlumnoCifrado({ nombre, apellido, dni, cursoId, comision = 'A' }) {
+  const dniHash = bcrypt.hashSync(String(dni), 10)
   return mockedDb.prepare(
     `INSERT INTO alumnos (nombre, apellido, dni_hash, dni_cif, curso_id, comision)
      VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(nombre, apellido, String(dni), encrypt(String(dni)), cursoId, comision).lastInsertRowid
+  ).run(nombre, apellido, dniHash, encrypt(String(dni)), cursoId, comision).lastInsertRowid
 }
 
 beforeEach(() => {

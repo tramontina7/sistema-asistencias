@@ -1,4 +1,6 @@
 import db from './db/index.js'
+import { decrypt } from './utils/crypto.js'
+import bcrypt from 'bcryptjs'
 
 export function runSchema() {
   db.pragma('foreign_keys = OFF')
@@ -158,6 +160,18 @@ export function runSchema() {
         db.exec('ALTER TABLE preceptores ADD COLUMN activo INTEGER NOT NULL DEFAULT 1')
       }
       db.pragma('user_version = 9')
+    }
+
+    // Migración v10: dni_hash en alumnos debe ser bcrypt (unidireccional), no AES reversible.
+    // Backfill: recalcula dni_hash = bcrypt(dni) para todos los alumnos existentes.
+    if (db.pragma('user_version', { simple: true }) < 10) {
+      const alumnos = db.prepare('SELECT alumno_id, dni_cif FROM alumnos').all()
+      for (const a of alumnos) {
+        const dni = decrypt(a.dni_cif)
+        const dniHash = bcrypt.hashSync(dni, 10)
+        db.prepare('UPDATE alumnos SET dni_hash = ? WHERE alumno_id = ?').run(dniHash, a.alumno_id)
+      }
+      db.pragma('user_version = 10')
     }
   })
 
