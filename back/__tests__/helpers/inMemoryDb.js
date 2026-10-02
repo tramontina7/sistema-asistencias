@@ -1,96 +1,34 @@
 import { vi } from 'vitest'
-import { encrypt } from '../../src/utils/crypto.js'
 
-// El DDL y la creación de la BD deben estar disponibles en el momento en que
-// Vitest ejecuta el factory de vi.mock (hoisted al tope del archivo). Por eso
-// se construyen dentro de vi.hoisted, que es la única forma segura de compartir
-// estado entre el mock y el resto del test.
+// La BD en memoria debe existir en el momento en que Vitest ejecuta el factory
+// de vi.mock (hoisted al tope del archivo). Por eso se crea dentro de
+// vi.hoisted, la única forma segura de compartir estado con el resto del test.
 const { testDb } = vi.hoisted(() => {
   // eslint-disable-next-line global-require
   const Database = require('better-sqlite3')
-
-  const DDL = `
-    CREATE TABLE IF NOT EXISTS cursos (
-      curso_id     INTEGER PRIMARY KEY AUTOINCREMENT,
-      anio         INTEGER NOT NULL CHECK(anio BETWEEN 1 AND 7),
-      division     TEXT NOT NULL CHECK(length(division) > 0),
-      especialidad TEXT NOT NULL,
-      turno        TEXT NOT NULL CHECK(turno IN ('Mañana', 'Tarde', 'Vespertino', 'Noche')),
-      UNIQUE(anio, division, especialidad, turno)
-    );
-
-    CREATE TABLE IF NOT EXISTS preceptores (
-      preceptor_id  INTEGER PRIMARY KEY AUTOINCREMENT,
-      nombre        TEXT NOT NULL,
-      apellido      TEXT NOT NULL,
-      dni_hash      TEXT NOT NULL UNIQUE,
-      dni_cif       TEXT NOT NULL,
-      telefono      TEXT NOT NULL,
-      username      TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      turno         TEXT CHECK(turno IS NULL OR turno IN ('Mañana', 'Tarde', 'Noche')),
-      activo        INTEGER NOT NULL DEFAULT 1
-    );
-
-    CREATE TABLE IF NOT EXISTS alumnos (
-      alumno_id   INTEGER PRIMARY KEY AUTOINCREMENT,
-      nombre      TEXT NOT NULL,
-      apellido    TEXT NOT NULL,
-      dni_hash    TEXT NOT NULL UNIQUE,
-      dni_cif     TEXT NOT NULL,
-      curso_id    INTEGER NOT NULL REFERENCES cursos(curso_id) ON DELETE RESTRICT,
-      comision    TEXT NOT NULL CHECK(length(comision) > 0),
-      qr_token_hash TEXT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS materias (
-      materia_id     INTEGER PRIMARY KEY AUTOINCREMENT,
-      nombre_materia TEXT NOT NULL,
-      especialidad   TEXT NOT NULL,
-      tipo           TEXT NOT NULL DEFAULT 'Teoría' CHECK(tipo IN ('Teoría', 'Taller', 'Laboratorio')),
-      curso_id       INTEGER NOT NULL REFERENCES cursos(curso_id) ON DELETE RESTRICT
-    );
-
-    CREATE TABLE IF NOT EXISTS horarios (
-      horario_id   INTEGER PRIMARY KEY AUTOINCREMENT,
-      materia_id   INTEGER NOT NULL REFERENCES materias(materia_id) ON DELETE CASCADE,
-      dia_semana   TEXT NOT NULL CHECK(dia_semana IN ('Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado')),
-      hora_entrada TEXT NOT NULL CHECK(hora_entrada LIKE '__:__'),
-      hora_salida  TEXT NOT NULL CHECK(hora_salida LIKE '__:__' AND hora_salida > hora_entrada),
-      comision     TEXT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS materia_comisiones (
-      materia_comision_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      materia_id          INTEGER NOT NULL REFERENCES materias(materia_id) ON DELETE CASCADE,
-      comision            TEXT NOT NULL,
-      UNIQUE(materia_id, comision)
-    );
-
-    CREATE TABLE IF NOT EXISTS asistencias (
-      asistencia_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      alumno_id     INTEGER NOT NULL REFERENCES alumnos(alumno_id) ON DELETE CASCADE,
-      materia_id    INTEGER NOT NULL REFERENCES materias(materia_id) ON DELETE RESTRICT,
-      fecha         TEXT NOT NULL DEFAULT (CURRENT_DATE),
-      estado        TEXT NOT NULL CHECK(estado IN ('Presente', 'Ausente', 'Tarde', 'Justificado')),
-      motivo        TEXT NULL,
-      hora_ingreso  TEXT NULL,
-      motivo_tarde  TEXT NULL,
-      UNIQUE(alumno_id, materia_id, fecha)
-    );
-  `
-
-  const db = new Database(':memory:')
-  db.pragma('foreign_keys = ON')
-  db.exec(DDL)
-
-  return { testDb: db }
+  return { testDb: new Database(':memory:') }
 })
 
-// Mock del módulo de BD. Se declara al tope (junto al vi.hoisted que crea la
-// instancia) para respetar el hoisting de Vitest. Los tests unit de servicios
-// se registran contra esta misma base en memoria vía setupTestDb().
 vi.mock('../../src/db/index.js', () => ({ default: testDb }))
+
+// El esquema se crea con el runSchema() real de la app, no con una copia del
+// DDL. Antes este helper mantenia el DDL duplicado a mano, lo que permitia que
+// schema.js y los tests divergieran en silencio: una columna nueva pasaba los
+// tests y rompia en produccion. Reusar runSchema mantiene una sola fuente de
+// verdad. Requiere que el mock de arriba este declarado antes de este import:
+// por eso es un import dinamico y no un import estatico (el hoisting de
+// vi.mock lo ejecutaria antes de tiempo).
+const { runSchema } = await import('../../src/schema.js')
+
+// Aplica el esquema real. Idempotente: se puede volver a llamar.
+export function ensureSchema() {
+  runSchema()
+  // runSchema() deja las FKs prendidas al terminar, pero better-sqlite3 las
+  // define OFF por conexion. Se activan explicitamente para que los tests no
+  // dependan de ese detalle interno de schema.js: sin FKs activas los tests
+  // dejarian de detectar violaciones de FK.
+  testDb.pragma('foreign_keys = ON')
+}
 
 /**
  * Devuelve la base en memoria registrada como mock del módulo de BD.
@@ -106,6 +44,13 @@ const RESET_ORDER = [
 ]
 
 export function resetDb(db) {
+  // runSchema() usa CREATE TABLE IF NOT EXISTS y solo agrega columnas, asi que
+  // es idempotente y no destruye datos. Se llama en cada reset para garantizar
+  // que el esquema exista aunque un test anterior lo haya modificado.
+  ensureSchema()
+
+  // Se vacian las filas de tablas hijas antes que las padres, para no violar
+  // las claves foraneas durante el DELETE.
   const tx = db.transaction(() => {
     for (const table of RESET_ORDER) {
       db.prepare(`DELETE FROM ${table}`).run()
