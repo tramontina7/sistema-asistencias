@@ -51,10 +51,10 @@ describe('POST /api/auth/login', () => {
     expect(authService.login).toHaveBeenCalledWith({ username: 'preceptor1', password: 'preceptor123' })
   })
 
-  it('devuelve 400 cuando faltan campos (HttpError capturado)', async () => {
+  it('devuelve 400 cuando faltan campos (validación express-validator)', async () => {
     const res = await request(app).post('/api/auth/login').send({ username: 'preceptor1' })
     expect(res.status).toBe(400)
-    expect(res.body).toEqual({ error: 'Usuario y contraseña requeridos' })
+    expect(res.body.error).toContain('password requerido')
   })
 
   it('propaga 401 cuando el servicio lanza HttpError', async () => {
@@ -113,10 +113,19 @@ describe('POST /api/auth/alumno/login', () => {
     expect(authService.loginAlumno).toHaveBeenCalledWith({ nombre: 'Ana', apellido: 'López', dni: '40000001' })
   })
 
-  it('devuelve 400 cuando faltan campos', async () => {
+  it('devuelve 400 cuando faltan campos (validación express-validator)', async () => {
     const res = await request(app).post('/api/auth/alumno/login').send({ nombre: 'Ana' })
     expect(res.status).toBe(400)
-    expect(res.body).toEqual({ error: 'Nombre, apellido y DNI son requeridos' })
+    expect(res.body.error).toContain('apellido requerido')
+    expect(res.body.error).toContain('dni requerido')
+  })
+
+  it('devuelve 400 cuando DNI tiene formato inválido', async () => {
+    const res = await request(app)
+      .post('/api/auth/alumno/login')
+      .send({ nombre: 'Ana', apellido: 'López', dni: '999' })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toContain('dni debe ser numérico de 7 u 8 dígitos')
   })
 
   it('propaga 401 cuando el servicio lanza HttpError', async () => {
@@ -125,7 +134,7 @@ describe('POST /api/auth/alumno/login', () => {
     })
     const res = await request(app)
       .post('/api/auth/alumno/login')
-      .send({ nombre: 'Ana', apellido: 'López', dni: '999' })
+      .send({ nombre: 'Ana', apellido: 'López', dni: '40000001' })
     expect(res.status).toBe(401)
     expect(res.body).toEqual({ error: 'Datos incorrectos. Verificá tu nombre, apellido y DNI.' })
   })

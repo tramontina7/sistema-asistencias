@@ -68,10 +68,10 @@ describe('POST /api/qr/escanear', () => {
     expect(asistenciaService.registrarQr).toHaveBeenCalledWith(expect.objectContaining({ alumnoId: 1, materiaId: 1, fecha: '2024-09-02' }))
   })
 
-  it('devuelve 400 sin token', async () => {
+  it('devuelve 400 sin token (validación express-validator)', async () => {
     const res = await request(app).post('/api/qr/escanear').set(AUTH).send({ materia_id: 1 })
     expect(res.status).toBe(400)
-    expect(res.body).toEqual({ error: 'token requerido' })
+    expect(res.body.error).toContain('token requerido')
   })
 
   it('detecta la materia automáticamente cuando falta materia_id', async () => {

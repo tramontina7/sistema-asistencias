@@ -44,24 +44,26 @@ describe('GET /api/cursos', () => {
 
 describe('POST /api/cursos', () => {
   it('devuelve 201 al crear un curso', async () => {
-    cursoService.create.mockReturnValue({ curso_id: 5, anio: 1, division: '1', especialidad: '', turno: 'Mañana', nombre: '1° 1° (Mañana)' })
+    cursoService.create.mockReturnValue({ curso_id: 5, anio: 1, division: '1', especialidad: 'Ciclo Básico', turno: 'Mañana', nombre: '1° 1° - Ciclo Básico (Mañana)' })
     const res = await request(app)
       .post('/api/cursos')
       .set('Authorization', 'Bearer x')
-      .send({ anio: 1, division: '1', turno: 'Mañana' })
+      .send({ anio: 1, division: '1', especialidad: 'Ciclo Básico', turno: 'Mañana' })
     expect(res.status).toBe(201)
     expect(res.body.curso_id).toBe(5)
-    expect(res.body.nombre).toBe('1° 1° (Mañana)')
-    expect(cursoService.create).toHaveBeenCalledWith({ anio: 1, division: '1', especialidad: undefined, turno: 'Mañana' })
+    expect(res.body.nombre).toBe('1° 1° - Ciclo Básico (Mañana)')
+    expect(cursoService.create).toHaveBeenCalledWith({ anio: 1, division: '1', especialidad: 'Ciclo Básico', turno: 'Mañana' })
   })
 
-  it('devuelve 400 cuando faltan campos', async () => {
+  it('devuelve 400 cuando faltan campos (validación express-validator)', async () => {
     const res = await request(app)
       .post('/api/cursos')
       .set('Authorization', 'Bearer x')
       .send({ anio: 1 })
     expect(res.status).toBe(400)
-    expect(res.body).toEqual({ error: 'anio, division y turno requeridos' })
+    expect(res.body.error).toContain('division requerida')
+    expect(res.body.error).toContain('especialidad requerida')
+    expect(res.body.error).toContain('turno requerido y válido')
   })
 })
 

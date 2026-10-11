@@ -46,19 +46,21 @@ describe('POST /api/asistencias/tomar', () => {
     expect(asistenciaService.tomar).toHaveBeenCalledWith(expect.objectContaining({ materiaId: 1, fecha: hoy, asistencias: [{ alumno_id: 1, estado: 'Presente' }] }))
   })
 
-  it('devuelve 400 si falta materia_id', async () => {
+  it('devuelve 400 si faltan campos (validación express-validator)', async () => {
     const res = await request(app).post('/api/asistencias/tomar').set(AUTH).send({ fecha: hoy, asistencias: [] })
     expect(res.status).toBe(400)
-    expect(res.body).toEqual({ error: 'materia_id, fecha y asistencias requeridos' })
+    expect(res.body.error).toContain('materia_id requerido')
+    expect(res.body.error).toContain('asistencias requerido')
   })
 
-  it('devuelve 400 si la fecha no es la de hoy', async () => {
+  it('devuelve 400 si la fecha no es la de hoy (validación express-validator primero)', async () => {
     const res = await request(app)
       .post('/api/asistencias/tomar')
       .set(AUTH)
-      .send({ materia_id: 1, fecha: '2024-09-02', asistencias: [] })
+      .send({ materia_id: 1, fecha: '2024-09-02', asistencias: [{ alumno_id: 1, estado: 'Presente' }] })
     expect(res.status).toBe(400)
-    expect(res.body).toEqual({ error: 'Solo se puede tomar la asistencia del día actual' })
+    // La validación pasa, pero el controlador rechaza por fecha distinta a hoy
+    expect(res.body.error).toBe('Solo se puede tomar la asistencia del día actual')
   })
 })
 
@@ -89,9 +91,9 @@ describe('PUT /api/asistencias/:id', () => {
     })
   })
 
-  it('devuelve 400 sin estado', async () => {
+  it('devuelve 400 sin estado (validación express-validator)', async () => {
     const res = await request(app).put('/api/asistencias/5').set(AUTH).send({})
     expect(res.status).toBe(400)
-    expect(res.body).toEqual({ error: 'Estado requerido' })
+    expect(res.body.error).toContain('estado requerido y válido')
   })
 })

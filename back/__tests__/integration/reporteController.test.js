@@ -55,10 +55,10 @@ describe('GET /api/reportes', () => {
       .toHaveBeenCalledWith({ cursoId: '1', tipo: 'cuatrimestre', fecha: '2024-05-15', cuatrimestre: '2' })
   })
 
-  it('devuelve 400 sin curso_id o fecha', async () => {
+  it('devuelve 400 sin curso_id o fecha (validación express-validator)', async () => {
     const res = await request(app).get('/api/reportes').query({ curso_id: '1' }).set(AUTH)
     expect(res.status).toBe(400)
-    expect(res.body).toEqual({ error: 'curso_id y fecha requeridos' })
+    expect(res.body.error).toContain('fecha requerida')
   })
 
   it('propaga HttpError del servicio', async () => {
@@ -82,9 +82,9 @@ describe('GET /api/reportes/materia', () => {
     expect(reporteService.matrizPorMateria).toHaveBeenCalledWith({ cursoId: '1' })
   })
 
-  it('devuelve 400 sin curso_id', async () => {
+  it('devuelve 400 sin curso_id (validación express-validator)', async () => {
     const res = await request(app).get('/api/reportes/materia').set(AUTH)
     expect(res.status).toBe(400)
-    expect(res.body).toEqual({ error: 'curso_id requerido' })
+    expect(res.body.error).toContain('curso_id requerido')
   })
 })

@@ -91,10 +91,13 @@ describe('POST /api/alumnos', () => {
     expect(alumnoService.create).toHaveBeenCalledWith({ nombre: 'Ana', apellido: 'López', dni: '40213456', cursoId: 1, comision: 'A' })
   })
 
-  it('devuelve 400 cuando faltan campos', async () => {
+  it('devuelve 400 cuando faltan campos (validación express-validator)', async () => {
     const res = await request(app).post('/api/alumnos').set(AUTH).send({ nombre: 'Ana' })
     expect(res.status).toBe(400)
-    expect(res.body).toEqual({ error: 'Todos los campos son requeridos' })
+    expect(res.body.error).toContain('apellido requerido')
+    expect(res.body.error).toContain('dni requerido')
+    expect(res.body.error).toContain('curso_id requerido')
+    expect(res.body.error).toContain('comision requerida')
   })
 
   it('devuelve 409 ante DNI duplicado', async () => {
